@@ -2,7 +2,6 @@
 
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import {
     Users,
     Briefcase,
@@ -10,10 +9,10 @@ import {
     Key,
     TrendingUp,
     UserPlus,
-    MoreVertical
+    MoreVertical,
+    X
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { createFrontendServiceClient, createAdminServiceClient } from '@/lib/supabase';
+import { useEffect, useState, useCallback } from 'react';
 
 interface DashboardStats {
     totalUsers: number;
@@ -24,8 +23,7 @@ interface DashboardStats {
 }
 
 interface FilterState {
-    location: boolean;
-    preferences: boolean;
+    location: string;
     newUsers: boolean;
     oldUsers: boolean;
 }
@@ -39,71 +37,63 @@ export default function DashboardPage() {
         newSignups: 0
     });
     const [loading, setLoading] = useState(true);
+
+    // Filtered counts
+    const [filteredTotalUsers, setFilteredTotalUsers] = useState<number | null>(null);
+    const [filteredActiveSearchers, setFilteredActiveSearchers] = useState<number | null>(null);
+
+    // Filter states for each card
     const [totalUsersFilter, setTotalUsersFilter] = useState<FilterState>({
-        location: false,
-        preferences: false,
+        location: '',
         newUsers: false,
         oldUsers: false
     });
     const [activeSearchFilter, setActiveSearchFilter] = useState<FilterState>({
-        location: false,
-        preferences: false,
+        location: '',
         newUsers: false,
         oldUsers: false
     });
+
+    // Location filter modal
+    const [showLocationModal, setShowLocationModal] = useState<'totalUsers' | 'activeSearchers' | null>(null);
+    const [selectedLocation, setSelectedLocation] = useState('');
+
+    const locations = [
+        'Bangalore', 'Hyderabad', 'Mumbai', 'Delhi', 'Chennai',
+        'Pune', 'Kolkata', 'Remote', 'India'
+    ];
 
     useEffect(() => {
         fetchDashboardStats();
     }, []);
 
+    // Fetch filtered stats when filters change
+    useEffect(() => {
+        if (totalUsersFilter.location || totalUsersFilter.newUsers || totalUsersFilter.oldUsers) {
+            fetchFilteredStats('totalUsers', totalUsersFilter);
+        } else {
+            setFilteredTotalUsers(null);
+        }
+    }, [totalUsersFilter]);
+
+    useEffect(() => {
+        if (activeSearchFilter.location || activeSearchFilter.newUsers || activeSearchFilter.oldUsers) {
+            fetchFilteredStats('activeJobSearchers', activeSearchFilter);
+        } else {
+            setFilteredActiveSearchers(null);
+        }
+    }, [activeSearchFilter]);
+
     const fetchDashboardStats = async () => {
         try {
-            const frontendClient = createFrontendServiceClient();
-            const adminClient = createAdminServiceClient();
+            const response = await fetch('/api/dashboard/stats');
+            const data = await response.json();
 
-            // Fetch total users from frontend DB
-            const { count: totalUsers } = await frontendClient
-                .from('profiles')
-                .select('*', { count: 'exact', head: true });
-
-            // Fetch active job searchers
-            const { count: activeJobSearchers } = await frontendClient
-                .from('job_search_status')
-                .select('*', { count: 'exact', head: true })
-                .eq('is_active', true);
-
-            // Fetch pending documents
-            const { count: pendingDocs } = await adminClient
-                .from('document_verifications')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'pending');
-
-            // Fetch API key expiry alerts (keys expiring in next 30 days)
-            const thirtyDaysFromNow = new Date();
-            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-
-            const { count: apiAlerts } = await adminClient
-                .from('api_keys')
-                .select('*', { count: 'exact', head: true })
-                .lte('expiry_date', thirtyDaysFromNow.toISOString())
-                .eq('is_active', true);
-
-            // Fetch new signups (last 7 days)
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-            const { count: newSignups } = await frontendClient
-                .from('profiles')
-                .select('*', { count: 'exact', head: true })
-                .gte('created_at', sevenDaysAgo.toISOString());
-
-            setStats({
-                totalUsers: totalUsers || 0,
-                activeJobSearchers: activeJobSearchers || 0,
-                pendingDocuments: pendingDocs || 0,
-                apiKeyAlerts: apiAlerts || 0,
-                newSignups: newSignups || 0
-            });
+            if (response.ok) {
+                setStats(data);
+            } else {
+                console.error('Error fetching stats:', data.error);
+            }
         } catch (error) {
             console.error('Error fetching dashboard stats:', error);
         } finally {
@@ -111,94 +101,197 @@ export default function DashboardPage() {
         }
     };
 
+    const fetchFilteredStats = async (statType: string, filters: FilterState) => {
+        try {
+            const params = new URLSearchParams();
+            params.set('statType', statType);
+            if (filters.location) params.set('location', filters.location);
+            if (filters.newUsers) params.set('newUsers', 'true');
+            if (filters.oldUsers) params.set('oldUsers', 'true');
+
+            const response = await fetch(`/api/dashboard/filtered-stats?${params.toString()}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                if (statType === 'totalUsers') {
+                    setFilteredTotalUsers(data.count);
+                } else {
+                    setFilteredActiveSearchers(data.count);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching filtered stats:', error);
+        }
+    };
+
+    const handleFilterChange = (
+        cardType: 'totalUsers' | 'activeSearchers',
+        filterKey: 'newUsers' | 'oldUsers'
+    ) => {
+        if (cardType === 'totalUsers') {
+            setTotalUsersFilter(prev => ({
+                ...prev,
+                [filterKey]: !prev[filterKey],
+                // Ensure only one time filter is active
+                ...(filterKey === 'newUsers' && !prev.newUsers ? { oldUsers: false } : {}),
+                ...(filterKey === 'oldUsers' && !prev.oldUsers ? { newUsers: false } : {})
+            }));
+        } else {
+            setActiveSearchFilter(prev => ({
+                ...prev,
+                [filterKey]: !prev[filterKey],
+                ...(filterKey === 'newUsers' && !prev.newUsers ? { oldUsers: false } : {}),
+                ...(filterKey === 'oldUsers' && !prev.oldUsers ? { newUsers: false } : {})
+            }));
+        }
+    };
+
+    const handleLocationSelect = (location: string) => {
+        if (showLocationModal === 'totalUsers') {
+            setTotalUsersFilter(prev => ({ ...prev, location }));
+        } else if (showLocationModal === 'activeSearchers') {
+            setActiveSearchFilter(prev => ({ ...prev, location }));
+        }
+        setShowLocationModal(null);
+        setSelectedLocation('');
+    };
+
+    const clearFilters = (cardType: 'totalUsers' | 'activeSearchers') => {
+        if (cardType === 'totalUsers') {
+            setTotalUsersFilter({ location: '', newUsers: false, oldUsers: false });
+            setFilteredTotalUsers(null);
+        } else {
+            setActiveSearchFilter({ location: '', newUsers: false, oldUsers: false });
+            setFilteredActiveSearchers(null);
+        }
+    };
+
     const StatCard = ({
         title,
         value,
+        filteredValue,
         icon: Icon,
         subtitle,
         filters,
+        cardType,
         onFilterChange,
+        onClearFilters,
         trend,
         trendValue
     }: {
         title: string;
         value: number;
+        filteredValue?: number | null;
         icon: React.ElementType;
         subtitle?: string;
         filters?: FilterState;
-        onFilterChange?: (filter: keyof FilterState) => void;
+        cardType?: 'totalUsers' | 'activeSearchers';
+        onFilterChange?: (filterKey: 'newUsers' | 'oldUsers') => void;
+        onClearFilters?: () => void;
         trend?: 'up' | 'down';
         trendValue?: string;
-    }) => (
-        <Card className="relative overflow-hidden">
-            <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500">{title}</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">
-                            {loading ? (
-                                <span className="inline-block w-16 h-8 skeleton rounded"></span>
-                            ) : (
-                                value.toLocaleString()
-                            )}
-                        </p>
-                        {subtitle && (
-                            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
-                        )}
-                        {trendValue && (
-                            <p className={`text-sm mt-1 ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-                                {trend === 'up' ? '+' : ''}{trendValue}
-                            </p>
-                        )}
-                    </div>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                        <MoreVertical className="w-5 h-5 text-gray-400" />
-                    </button>
-                </div>
+    }) => {
+        const displayValue = filteredValue !== null && filteredValue !== undefined ? filteredValue : value;
+        const isFiltered = filters && (filters.location || filters.newUsers || filters.oldUsers);
 
-                {filters && onFilterChange && (
-                    <div className="flex flex-wrap gap-2 mt-4">
-                        <button
-                            onClick={() => onFilterChange('location')}
-                            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.location
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                }`}
-                        >
-                            Location
-                        </button>
-                        <button
-                            onClick={() => onFilterChange('preferences')}
-                            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.preferences
-                                    ? 'bg-yellow-500 text-white'
-                                    : 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
-                                }`}
-                        >
-                            Preferences
-                        </button>
-                        <button
-                            onClick={() => onFilterChange('newUsers')}
-                            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.newUsers
-                                    ? 'bg-gray-700 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                        >
-                            New Users
-                        </button>
-                        <button
-                            onClick={() => onFilterChange('oldUsers')}
-                            className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.oldUsers
-                                    ? 'bg-gray-700 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                        >
-                            Old Users
+        return (
+            <Card className="relative overflow-hidden">
+                <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">{title}</p>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <p className="text-3xl font-bold text-gray-900">
+                                    {loading ? (
+                                        <span className="inline-block w-16 h-8 skeleton rounded"></span>
+                                    ) : (
+                                        displayValue.toLocaleString()
+                                    )}
+                                </p>
+                                {isFiltered && filteredValue !== null && (
+                                    <span className="text-sm text-gray-400">
+                                        of {value.toLocaleString()}
+                                    </span>
+                                )}
+                            </div>
+                            {subtitle && (
+                                <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+                            )}
+                            {trendValue && (
+                                <p className={`text-sm mt-1 ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {trend === 'up' ? '+' : ''}{trendValue}
+                                </p>
+                            )}
+                        </div>
+                        <button className="p-1 hover:bg-gray-100 rounded">
+                            <MoreVertical className="w-5 h-5 text-gray-400" />
                         </button>
                     </div>
-                )}
-            </CardContent>
-        </Card>
-    );
+
+                    {filters && cardType && onFilterChange && (
+                        <div className="mt-4">
+                            <div className="flex flex-wrap gap-2">
+                                {/* Location Filter */}
+                                <button
+                                    onClick={() => setShowLocationModal(cardType)}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.location
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                        }`}
+                                >
+                                    {filters.location || 'Location'}
+                                    {filters.location && (
+                                        <X
+                                            className="w-3 h-3 ml-1 inline"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (cardType === 'totalUsers') {
+                                                    setTotalUsersFilter(prev => ({ ...prev, location: '' }));
+                                                } else {
+                                                    setActiveSearchFilter(prev => ({ ...prev, location: '' }));
+                                                }
+                                            }}
+                                        />
+                                    )}
+                                </button>
+
+                                {/* New Users Filter */}
+                                <button
+                                    onClick={() => onFilterChange('newUsers')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.newUsers
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-green-50 text-green-600 hover:bg-green-100'
+                                        }`}
+                                >
+                                    New Users
+                                </button>
+
+                                {/* Old Users Filter */}
+                                <button
+                                    onClick={() => onFilterChange('oldUsers')}
+                                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.oldUsers
+                                            ? 'bg-gray-700 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    Old Users
+                                </button>
+                            </div>
+
+                            {isFiltered && onClearFilters && (
+                                <button
+                                    onClick={onClearFilters}
+                                    className="mt-2 text-xs text-blue-600 hover:text-blue-700"
+                                >
+                                    Clear all filters
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
 
     return (
         <AdminLayout>
@@ -210,18 +303,24 @@ export default function DashboardPage() {
                     <StatCard
                         title="Total Users"
                         value={stats.totalUsers}
+                        filteredValue={filteredTotalUsers}
                         icon={Users}
                         filters={totalUsersFilter}
-                        onFilterChange={(filter) => setTotalUsersFilter(prev => ({ ...prev, [filter]: !prev[filter] }))}
+                        cardType="totalUsers"
+                        onFilterChange={(key) => handleFilterChange('totalUsers', key)}
+                        onClearFilters={() => clearFilters('totalUsers')}
                     />
 
                     {/* Active Job Searchers */}
                     <StatCard
                         title="Active Job Searchers"
                         value={stats.activeJobSearchers}
+                        filteredValue={filteredActiveSearchers}
                         icon={Briefcase}
                         filters={activeSearchFilter}
-                        onFilterChange={(filter) => setActiveSearchFilter(prev => ({ ...prev, [filter]: !prev[filter] }))}
+                        cardType="activeSearchers"
+                        onFilterChange={(key) => handleFilterChange('activeSearchers', key)}
+                        onClearFilters={() => clearFilters('activeSearchers')}
                     />
 
                     {/* Pending Documents */}
@@ -229,7 +328,7 @@ export default function DashboardPage() {
                         title="Pending Documents"
                         value={stats.pendingDocuments}
                         icon={FileText}
-                        subtitle={`From ${Math.ceil(stats.pendingDocuments / 2)} users`}
+                        subtitle={stats.pendingDocuments > 0 ? `From ${Math.ceil(stats.pendingDocuments / 2)} users` : 'All documents reviewed'}
                     />
 
                     {/* API Key Expiry Alerts */}
@@ -251,7 +350,7 @@ export default function DashboardPage() {
 
                     {/* New Signups */}
                     <StatCard
-                        title="New Signups"
+                        title="New Signups (7 days)"
                         value={stats.newSignups}
                         icon={UserPlus}
                         trend="up"
@@ -259,6 +358,35 @@ export default function DashboardPage() {
                     />
                 </div>
             </div>
+
+            {/* Location Selection Modal */}
+            {showLocationModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-slide-up">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold text-gray-900">Select Location</h2>
+                            <button
+                                onClick={() => setShowLocationModal(null)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            {locations.map((loc) => (
+                                <button
+                                    key={loc}
+                                    onClick={() => handleLocationSelect(loc)}
+                                    className="px-4 py-2 text-sm text-left rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                >
+                                    {loc}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </AdminLayout>
     );
 }

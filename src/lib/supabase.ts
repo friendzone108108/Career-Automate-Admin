@@ -1,15 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Admin Supabase Client (for authentication and admin data)
+// Admin Supabase Client (for client-side authentication)
 const adminSupabaseUrl = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL!;
 const adminSupabaseAnonKey = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_ANON_KEY!;
 
 export const adminSupabase = createClient(adminSupabaseUrl, adminSupabaseAnonKey);
 
-// Admin Supabase with Service Role (for server-side operations)
-export const createAdminServiceClient = () => {
+// Server-side only clients - these functions should only be called from API routes or server components
+export const getAdminServiceClient = () => {
+    const url = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL!;
     const serviceRoleKey = process.env.ADMIN_SUPABASE_SERVICE_ROLE_KEY!;
-    return createClient(adminSupabaseUrl, serviceRoleKey, {
+
+    if (!url || !serviceRoleKey) {
+        throw new Error('Admin Supabase credentials not configured');
+    }
+
+    return createClient(url, serviceRoleKey, {
         auth: {
             autoRefreshToken: false,
             persistSession: false
@@ -17,14 +23,22 @@ export const createAdminServiceClient = () => {
     });
 };
 
-// Frontend Supabase Client (Read-only for user data)
-export const createFrontendServiceClient = () => {
-    const frontendUrl = process.env.FRONTEND_SUPABASE_URL!;
-    const frontendServiceKey = process.env.FRONTEND_SUPABASE_SERVICE_ROLE_KEY!;
-    return createClient(frontendUrl, frontendServiceKey, {
+export const getFrontendServiceClient = () => {
+    const url = process.env.FRONTEND_SUPABASE_URL!;
+    const serviceRoleKey = process.env.FRONTEND_SUPABASE_SERVICE_ROLE_KEY!;
+
+    if (!url || !serviceRoleKey) {
+        throw new Error('Frontend Supabase credentials not configured');
+    }
+
+    return createClient(url, serviceRoleKey, {
         auth: {
             autoRefreshToken: false,
             persistSession: false
         }
     });
 };
+
+// Legacy exports for compatibility (will throw error if used client-side without proper env vars)
+export const createAdminServiceClient = getAdminServiceClient;
+export const createFrontendServiceClient = getFrontendServiceClient;
