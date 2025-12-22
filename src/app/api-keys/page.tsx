@@ -11,8 +11,7 @@ import {
     X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { createAdminServiceClient } from '@/lib/supabase';
-import { getExpiryStatus, formatDate } from '@/lib/utils';
+import { getExpiryStatus } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 
@@ -32,6 +31,7 @@ export default function ApiKeysPage() {
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
+    const [saving, setSaving] = useState(false);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -46,16 +46,17 @@ export default function ApiKeysPage() {
     }, []);
 
     const fetchApiKeys = async () => {
+        setLoading(true);
         try {
-            const adminClient = createAdminServiceClient();
+            const response = await fetch('/api/api-keys');
+            const data = await response.json();
 
-            const { data, error } = await adminClient
-                .from('api_keys')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setApiKeys(data || []);
+            if (response.ok) {
+                setApiKeys(data.keys || []);
+            } else {
+                console.error('Error fetching API keys:', data.error);
+                toast.error('Failed to load API keys');
+            }
         } catch (error) {
             console.error('Error fetching API keys:', error);
             toast.error('Failed to load API keys');
@@ -72,62 +73,36 @@ export default function ApiKeysPage() {
             return;
         }
 
+        setSaving(true);
         try {
-            const adminClient = createAdminServiceClient();
+            const url = '/api/api-keys';
+            const method = editingKey ? 'PUT' : 'POST';
+            const body = editingKey
+                ? { ...formData, id: editingKey.id, admin_id: adminUser?.id }
+                : { ...formData, admin_id: adminUser?.id };
 
-            if (editingKey) {
-                // Update existing key
-                await adminClient
-                    .from('api_keys')
-                    .update({
-                        api_name: formData.api_name,
-                        variable_name: formData.variable_name,
-                        api_key_value: formData.api_key_value,
-                        expiry_date: formData.expiry_date || null
-                    })
-                    .eq('id', editingKey.id);
+            const response = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
 
-                // Log the action
-                await adminClient.from('activity_logs').insert({
-                    admin_id: adminUser?.id,
-                    admin_email: adminUser?.email,
-                    action_type: 'update_api_key',
-                    action_description: `Updated API key: ${formData.api_name}`,
-                    metadata: { key_name: formData.api_name }
-                });
+            const data = await response.json();
 
-                toast.success('API key updated successfully');
+            if (response.ok) {
+                toast.success(editingKey ? 'API key updated successfully' : 'API key added successfully');
+                setShowAddModal(false);
+                setEditingKey(null);
+                setFormData({ api_name: '', variable_name: '', api_key_value: '', expiry_date: '' });
+                fetchApiKeys();
             } else {
-                // Create new key
-                await adminClient
-                    .from('api_keys')
-                    .insert({
-                        api_name: formData.api_name,
-                        variable_name: formData.variable_name,
-                        api_key_value: formData.api_key_value,
-                        expiry_date: formData.expiry_date || null,
-                        created_by: adminUser?.id
-                    });
-
-                // Log the action
-                await adminClient.from('activity_logs').insert({
-                    admin_id: adminUser?.id,
-                    admin_email: adminUser?.email,
-                    action_type: 'add_api_key',
-                    action_description: `Added new API key: ${formData.api_name}`,
-                    metadata: { key_name: formData.api_name }
-                });
-
-                toast.success('API key added successfully');
+                toast.error(data.error || 'Failed to save API key');
             }
-
-            setShowAddModal(false);
-            setEditingKey(null);
-            setFormData({ api_name: '', variable_name: '', api_key_value: '', expiry_date: '' });
-            fetchApiKeys();
         } catch (error) {
             console.error('Error saving API key:', error);
             toast.error('Failed to save API key');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -147,26 +122,23 @@ export default function ApiKeysPage() {
         if (!newKeyValue) return;
 
         try {
-            const adminClient = createAdminServiceClient();
-
-            await adminClient
-                .from('api_keys')
-                .update({ api_key_value: newKeyValue })
-                .eq('id', keyId);
-
-            const key = apiKeys.find(k => k.id === keyId);
-
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'update_api_key',
-                action_description: `Updated key value for: ${key?.api_name}`,
-                metadata: { key_name: key?.api_name }
+            const response = await fetch('/api/api-keys', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: keyId,
+                    api_key_value: newKeyValue,
+                    admin_id: adminUser?.id
+                })
             });
 
-            toast.success('API key value updated');
-            fetchApiKeys();
+            if (response.ok) {
+                toast.success('API key value updated');
+                fetchApiKeys();
+            } else {
+                const data = await response.json();
+                toast.error(data.error || 'Failed to update API key');
+            }
         } catch (error) {
             console.error('Error updating API key:', error);
             toast.error('Failed to update API key');
@@ -177,24 +149,17 @@ export default function ApiKeysPage() {
         if (!confirm(`Are you sure you want to delete "${keyName}"?`)) return;
 
         try {
-            const adminClient = createAdminServiceClient();
-
-            await adminClient
-                .from('api_keys')
-                .delete()
-                .eq('id', keyId);
-
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'delete_api_key',
-                action_description: `Deleted API key: ${keyName}`,
-                metadata: { key_name: keyName }
+            const response = await fetch(`/api/api-keys?id=${keyId}&admin_id=${adminUser?.id}`, {
+                method: 'DELETE'
             });
 
-            toast.success('API key deleted');
-            fetchApiKeys();
+            if (response.ok) {
+                toast.success('API key deleted');
+                fetchApiKeys();
+            } else {
+                const data = await response.json();
+                toast.error(data.error || 'Failed to delete API key');
+            }
         } catch (error) {
             console.error('Error deleting API key:', error);
             toast.error('Failed to delete API key');
@@ -215,6 +180,12 @@ export default function ApiKeysPage() {
                 <Badge variant={variant}>{status.text}</Badge>
             </span>
         );
+    };
+
+    const closeModal = () => {
+        setShowAddModal(false);
+        setEditingKey(null);
+        setFormData({ api_name: '', variable_name: '', api_key_value: '', expiry_date: '' });
     };
 
     return (
@@ -320,11 +291,7 @@ export default function ApiKeysPage() {
                                     {editingKey ? 'Edit API Key' : 'Add New API Key'}
                                 </h2>
                                 <button
-                                    onClick={() => {
-                                        setShowAddModal(false);
-                                        setEditingKey(null);
-                                        setFormData({ api_name: '', variable_name: '', api_key_value: '', expiry_date: '' });
-                                    }}
+                                    onClick={closeModal}
                                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                 >
                                     <X className="w-5 h-5 text-gray-500" />
@@ -354,7 +321,7 @@ export default function ApiKeysPage() {
                                     placeholder="Enter the API key"
                                     value={formData.api_key_value}
                                     onChange={(e) => setFormData({ ...formData, api_key_value: e.target.value })}
-                                    required
+                                    required={!editingKey}
                                 />
 
                                 <Input
@@ -368,15 +335,11 @@ export default function ApiKeysPage() {
                                     <Button
                                         type="button"
                                         variant="secondary"
-                                        onClick={() => {
-                                            setShowAddModal(false);
-                                            setEditingKey(null);
-                                            setFormData({ api_name: '', variable_name: '', api_key_value: '', expiry_date: '' });
-                                        }}
+                                        onClick={closeModal}
                                     >
                                         Cancel
                                     </Button>
-                                    <Button type="submit">
+                                    <Button type="submit" loading={saving}>
                                         {editingKey ? 'Update' : 'Add'} Key
                                     </Button>
                                 </div>

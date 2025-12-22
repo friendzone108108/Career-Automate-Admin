@@ -35,18 +35,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-    const fetchAdminUser = async (userId: string) => {
-        const { data, error } = await adminSupabase
-            .from('admin_users')
-            .select('*')
-            .eq('id', userId)
-            .single();
+    const fetchAdminUser = async (userId: string): Promise<AdminUser | null> => {
+        try {
+            const { data, error } = await adminSupabase
+                .from('admin_users')
+                .select('*')
+                .eq('id', userId)
+                .single();
 
-        if (error) {
-            console.error('Error fetching admin user:', error);
+            if (error) {
+                console.error('Error fetching admin user:', error);
+                return null;
+            }
+            return data as AdminUser;
+        } catch (err) {
+            console.error('Error in fetchAdminUser:', err);
             return null;
         }
-        return data as AdminUser;
     };
 
     const refreshAdminUser = async () => {
@@ -56,46 +61,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Initialize auth state
     useEffect(() => {
-        // Get initial session
-        adminSupabase.auth.getSession().then(async ({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
+        let mounted = true;
 
-            if (session?.user) {
-                const adminData = await fetchAdminUser(session.user.id);
-                if (adminData) {
-                    setAdminUser(adminData);
-                    // Update last login
-                    await adminSupabase
-                        .from('admin_users')
-                        .update({ last_login: new Date().toISOString() })
-                        .eq('id', session.user.id);
-                } else {
-                    // User exists in auth but not in admin_users - sign out
-                    await adminSupabase.auth.signOut();
-                    setUser(null);
-                    setSession(null);
+        const initAuth = async () => {
+            try {
+                const { data: { session: currentSession } } = await adminSupabase.auth.getSession();
+
+                if (!mounted) return;
+
+                if (currentSession?.user) {
+                    setSession(currentSession);
+                    setUser(currentSession.user);
+
+                    const adminData = await fetchAdminUser(currentSession.user.id);
+                    if (mounted) {
+                        setAdminUser(adminData);
+                    }
+                }
+            } catch (error) {
+                console.error('Error initializing auth:', error);
+            } finally {
+                if (mounted) {
+                    setLoading(false);
                 }
             }
-            setLoading(false);
-        });
+        };
+
+        initAuth();
 
         // Listen for auth changes
-        const { data: { subscription } } = adminSupabase.auth.onAuthStateChange(async (event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
+        const { data: { subscription } } = adminSupabase.auth.onAuthStateChange(async (event, newSession) => {
+            if (!mounted) return;
 
-            if (session?.user) {
-                const adminData = await fetchAdminUser(session.user.id);
-                setAdminUser(adminData);
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
+
+            if (newSession?.user) {
+                const adminData = await fetchAdminUser(newSession.user.id);
+                if (mounted) {
+                    setAdminUser(adminData);
+                }
             } else {
                 setAdminUser(null);
             }
+
             setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const signIn = async (email: string, password: string) => {
@@ -122,13 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 setAdminUser(adminData);
 
-                // Log the login activity
-                await adminSupabase.from('activity_logs').insert({
+                // Log the login activity (fire and forget)
+                adminSupabase.from('activity_logs').insert({
                     admin_id: data.user.id,
                     admin_email: email,
                     action_type: 'login',
                     action_description: 'Admin logged in',
-                });
+                }).then(() => { });
             }
 
             return { error: null };
@@ -138,21 +156,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signOut = async () => {
-        if (user) {
-            // Log the logout activity
-            await adminSupabase.from('activity_logs').insert({
-                admin_id: user.id,
-                admin_email: user.email,
-                action_type: 'logout',
-                action_description: 'Admin logged out',
-            });
-        }
+        try {
+            if (user) {
+                // Log the logout activity (fire and forget)
+                adminSupabase.from('activity_logs').insert({
+                    admin_id: user.id,
+                    admin_email: user.email,
+                    action_type: 'logout',
+                    action_description: 'Admin logged out',
+                }).then(() => { });
+            }
 
-        await adminSupabase.auth.signOut();
-        setUser(null);
-        setAdminUser(null);
-        setSession(null);
-        router.push('/login');
+            await adminSupabase.auth.signOut();
+            setUser(null);
+            setAdminUser(null);
+            setSession(null);
+            router.push('/login');
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
     };
 
     return (
