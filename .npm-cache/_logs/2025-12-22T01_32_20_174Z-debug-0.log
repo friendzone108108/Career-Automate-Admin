@@ -1,0 +1,12 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.3
+2 info using node@v22.18.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\Mini_Project\career-automate-admin\.npmrc
+5 silly config load:file:C:\Users\shree\.npmrc
+6 silly config load:file:C:\Users\shree\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm run dev
+8 verbose argv "run" "dev"
+9 verbose logfile logs-max:10 dir:D:\Mini_Project\career-automate-admin\.npm-cache\_logs\2025-12-22T01_32_20_174Z-
+10 verbose logfile D:\Mini_Project\career-automate-admin\.npm-cache\_logs\2025-12-22T01_32_20_174Z-debug-0.log
+11 silly logfile done cleaning log files
