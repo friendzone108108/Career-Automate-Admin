@@ -61,12 +61,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Initialize auth state
+    // Initialize auth state with timeout
     useEffect(() => {
         let mounted = true;
+        let timeoutId: NodeJS.Timeout;
 
         const initAuth = async () => {
             try {
+                // Set a timeout to prevent infinite loading
+                timeoutId = setTimeout(() => {
+                    if (mounted && loading) {
+                        console.warn('Auth initialization timeout - forcing load complete');
+                        setLoading(false);
+                    }
+                }, 5000); // 5 second timeout
+
                 const { data: { session: currentSession } } = await adminSupabase.auth.getSession();
 
                 if (!mounted) return;
@@ -84,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 console.error('Error initializing auth:', error);
             } finally {
                 if (mounted) {
+                    clearTimeout(timeoutId);
                     setLoading(false);
                 }
             }
@@ -112,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return () => {
             mounted = false;
+            clearTimeout(timeoutId);
             subscription.unsubscribe();
         };
     }, []);
