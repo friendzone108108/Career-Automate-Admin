@@ -9,6 +9,11 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CareerAutoMate Admin",
   description: "Admin panel for CareerAutoMate platform",
+  icons: {
+    icon: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
+    shortcut: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
+    apple: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
+  },
 };
 
 export default function RootLayout({

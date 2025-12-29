@@ -28,16 +28,14 @@ export function Sidebar() {
         <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-white border-r border-gray-200 shadow-sm">
             <div className="flex h-full flex-col">
                 {/* Logo */}
-                <div className="flex h-16 items-center px-6 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">CA</span>
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-gray-900">CareerAutoMate</h1>
-                            <p className="text-xs text-gray-500">Admin</p>
-                        </div>
-                    </div>
+                <div className="flex h-16 items-center px-4 border-b border-gray-200">
+                    <Link href="/dashboard" className="flex items-center gap-2">
+                        <img
+                            src="https://i.postimg.cc/1RvV7gcX/CA_logo_banner_transparent.png"
+                            alt="CareerAutomate Admin"
+                            className="h-10 object-contain"
+                        />
+                    </Link>
                 </div>
 
                 {/* Navigation */}

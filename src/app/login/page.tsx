@@ -54,10 +54,11 @@ export default function LoginPage() {
             <div className="w-full max-w-md">
                 {/* Logo */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg shadow-blue-500/30 mb-4">
-                        <span className="text-white font-bold text-2xl">CA</span>
-                    </div>
-                    <h1 className="text-2xl font-bold text-gray-900">CareerAutoMate</h1>
+                    <img
+                        src="https://i.postimg.cc/1RvV7gcX/CA_logo_banner_transparent.png"
+                        alt="CareerAutomate Admin"
+                        className="h-16 mx-auto mb-4 object-contain"
+                    />
                     <p className="text-gray-500 mt-1">Admin Portal</p>
                 </div>
 
