@@ -7,12 +7,12 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CareerAutoMate Admin",
+  title: "Career Automate - AI Powered Job Finder | Admin",
   description: "Admin panel for CareerAutoMate platform",
   icons: {
-    icon: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
-    shortcut: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
-    apple: 'https://i.postimg.cc/v80x21Lm/CA_logo_banner.jpg',
+    icon: 'https://i.postimg.cc/X7XGRVQb/CA_logo_sq.jpg',
+    shortcut: 'https://i.postimg.cc/X7XGRVQb/CA_logo_sq.jpg',
+    apple: 'https://i.postimg.cc/X7XGRVQb/CA_logo_sq.jpg',
   },
 };
 
