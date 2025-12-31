@@ -278,9 +278,9 @@ export default function UsersPage() {
                                             <td>
                                                 <div className="flex items-center gap-2">
                                                     <Link
-                                                        href={`/users/${user.id}/documents`}
+                                                        href={`/users/${user.id}/manage-certificates`}
                                                         className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="View Documents"
+                                                        title="Manage Certificates"
                                                     >
                                                         <FileText className="w-4 h-4" />
                                                     </Link>
