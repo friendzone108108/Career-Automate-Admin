@@ -9,12 +9,14 @@ import {
     Key,
     Bell,
     Settings,
-    Cog
+    Cog,
+    Briefcase
 } from 'lucide-react';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/users', label: 'User Management', icon: Users },
+    { href: '/job-fetcher', label: 'Job Fetcher', icon: Briefcase },
     { href: '/api-keys', label: 'API Keys', icon: Key },
     { href: '/notifications', label: 'Notifications', icon: Bell },
     { href: '/control', label: 'Control Mechanism', icon: Cog },
