@@ -6,21 +6,18 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/context/AuthContext';
 import { createAdminServiceClient, adminSupabase } from '@/lib/supabase';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronRight, Upload } from 'lucide-react';
-import Image from 'next/image';
+import { ChevronRight, User } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SettingsPage() {
     const { adminUser, refreshAdminUser } = useAuth();
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Profile form state
     const [firstName, setFirstName] = useState(adminUser?.first_name || '');
     const [lastName, setLastName] = useState(adminUser?.last_name || '');
     const [savingProfile, setSavingProfile] = useState(false);
-    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     // Password form state
     const [currentPassword, setCurrentPassword] = useState('');
@@ -45,65 +42,6 @@ export default function SettingsPage() {
     };
 
     const passwordStrength = getPasswordStrength(newPassword);
-
-    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        // Validate file type
-        if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
-            toast.error('Please upload a JPEG or PNG image');
-            return;
-        }
-
-        // Validate file size (max 2MB)
-        if (file.size > 2 * 1024 * 1024) {
-            toast.error('Image size must be less than 2MB');
-            return;
-        }
-
-        setUploadingPhoto(true);
-        try {
-            const adminClient = createAdminServiceClient();
-
-            // Upload to storage
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${adminUser?.id}_${Date.now()}.${fileExt}`;
-
-            const { error: uploadError } = await adminClient.storage
-                .from('admin-profile-photos')
-                .upload(fileName, file);
-
-            if (uploadError) throw uploadError;
-
-            // Get public URL
-            const { data: urlData } = adminClient.storage
-                .from('admin-profile-photos')
-                .getPublicUrl(fileName);
-
-            // Update admin user profile
-            await adminClient
-                .from('admin_users')
-                .update({ profile_photo_url: urlData.publicUrl })
-                .eq('id', adminUser?.id);
-
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'update_profile_photo',
-                action_description: 'Updated profile photo'
-            });
-
-            toast.success('Profile photo updated');
-            refreshAdminUser();
-        } catch (error) {
-            console.error('Error uploading photo:', error);
-            toast.error('Failed to upload photo');
-        } finally {
-            setUploadingPhoto(false);
-        }
-    };
 
     const handleSaveProfile = async () => {
         if (!firstName.trim() || !lastName.trim()) {
@@ -223,24 +161,12 @@ export default function SettingsPage() {
                     <CardContent className="p-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-6">Profile Information</h2>
 
-                        {/* Profile Photo and Name */}
+                        {/* Profile Display */}
                         <div className="flex items-center gap-6 mb-6">
-                            <div className="relative">
-                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden">
-                                    {adminUser?.profile_photo_url ? (
-                                        <Image
-                                            src={adminUser.profile_photo_url}
-                                            alt="Profile"
-                                            width={80}
-                                            height={80}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        <span className="text-white font-bold text-2xl">
-                                            {adminUser?.first_name?.[0] || adminUser?.email?.[0]?.toUpperCase() || 'A'}
-                                        </span>
-                                    )}
-                                </div>
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                                <span className="text-white font-bold text-2xl">
+                                    {adminUser?.first_name?.[0] || adminUser?.email?.[0]?.toUpperCase() || 'A'}
+                                </span>
                             </div>
 
                             <div className="flex-1">
@@ -248,23 +174,6 @@ export default function SettingsPage() {
                                     {adminUser?.full_name || `${firstName} ${lastName}` || 'Admin User'}
                                 </p>
                                 <p className="text-gray-500">{adminUser?.email}</p>
-                            </div>
-
-                            <div>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    onChange={handlePhotoUpload}
-                                    accept="image/jpeg,image/jpg,image/png"
-                                    className="hidden"
-                                />
-                                <Button
-                                    variant="outline"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    loading={uploadingPhoto}
-                                >
-                                    Upload new photo
-                                </Button>
                             </div>
                         </div>
 

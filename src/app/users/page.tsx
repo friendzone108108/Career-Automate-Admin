@@ -24,6 +24,7 @@ interface User {
     id: string;
     full_name: string;
     email: string;
+    primary_email: string | null;
     is_verified: boolean;
     address: string | null;
     github_username: string | null;
@@ -32,7 +33,6 @@ interface User {
         roles_targeted?: string[];
         preferred_locations?: string[];
     } | null;
-    job_status: string;
     is_blocked: boolean;
     created_at: string;
 }
@@ -119,17 +119,41 @@ export default function UsersPage() {
         }
     };
 
-    const getJobStatusBadge = (status: string) => {
-        switch (status) {
-            case 'Actively looking':
-                return <Badge variant="success">{status}</Badge>;
-            case 'Open to offers':
-                return <Badge variant="info">{status}</Badge>;
-            case 'Blocked':
-                return <Badge variant="danger">{status}</Badge>;
-            default:
-                return <Badge variant="default">{status || 'Not available'}</Badge>;
+    const handleSendEmail = (user: User) => {
+        // Get the user's primary email or fallback to auth email
+        const recipientEmail = user.primary_email || user.email;
+
+        if (!recipientEmail) {
+            toast.error('No email address available for this user');
+            return;
         }
+
+        // Open the default email client with mailto link
+        const mailtoLink = `mailto:${recipientEmail}?subject=Career Automate - Admin Message`;
+        window.location.href = mailtoLink;
+    };
+
+    const getUserEmail = (user: User) => {
+        // Show primary_email if available, otherwise show auth email
+        return user.primary_email || user.email;
+    };
+
+    const getTargetRoles = (user: User) => {
+        const roles = user.career_preferences?.roles_targeted;
+        if (!roles || roles.length === 0) {
+            return <span className="text-gray-400">Not specified</span>;
+        }
+
+        // Show all roles as badges
+        return (
+            <div className="flex flex-wrap gap-1">
+                {roles.map((role, index) => (
+                    <Badge key={index} variant="info" className="text-xs">
+                        {role}
+                    </Badge>
+                ))}
+            </div>
+        );
     };
 
     const totalPages = Math.ceil(totalUsers / pageSize);
@@ -140,10 +164,6 @@ export default function UsersPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                    <Button>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add User
-                    </Button>
                 </div>
 
                 {/* Filters */}
@@ -155,7 +175,7 @@ export default function UsersPage() {
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Search by name..."
+                                        placeholder="Search by name or email..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -231,8 +251,7 @@ export default function UsersPage() {
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
-                                    <th>Target Role</th>
-                                    <th>Job Status</th>
+                                    <th>Target Roles</th>
                                     <th>GitHub</th>
                                     <th>Actions</th>
                                 </tr>
@@ -243,15 +262,14 @@ export default function UsersPage() {
                                         <tr key={i}>
                                             <td><div className="w-32 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-48 h-4 skeleton rounded"></div></td>
-                                            <td><div className="w-24 h-4 skeleton rounded"></div></td>
-                                            <td><div className="w-20 h-4 skeleton rounded"></div></td>
+                                            <td><div className="w-32 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-12 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-24 h-4 skeleton rounded"></div></td>
                                         </tr>
                                     ))
                                 ) : users.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="text-center py-8 text-gray-500">
+                                        <td colSpan={5} className="text-center py-8 text-gray-500">
                                             No users found
                                         </td>
                                     </tr>
@@ -263,11 +281,8 @@ export default function UsersPage() {
                                                     {user.full_name}
                                                 </div>
                                             </td>
-                                            <td className="text-gray-600">{user.email}</td>
-                                            <td>
-                                                {user.career_preferences?.roles_targeted?.[0] || 'Not specified'}
-                                            </td>
-                                            <td>{getJobStatusBadge(user.job_status)}</td>
+                                            <td className="text-gray-600">{getUserEmail(user)}</td>
+                                            <td>{getTargetRoles(user)}</td>
                                             <td>
                                                 {user.github_username ? (
                                                     <span className="text-green-600 font-medium">Yes</span>
@@ -278,13 +293,14 @@ export default function UsersPage() {
                                             <td>
                                                 <div className="flex items-center gap-2">
                                                     <Link
-                                                        href={`/users/${user.id}/manage-certificates`}
+                                                        href={`/users/${user.id}/documents`}
                                                         className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="Manage Certificates"
+                                                        title="View Documents"
                                                     >
                                                         <FileText className="w-4 h-4" />
                                                     </Link>
                                                     <button
+                                                        onClick={() => handleSendEmail(user)}
                                                         className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                         title="Send Email"
                                                     >
@@ -292,7 +308,7 @@ export default function UsersPage() {
                                                     </button>
                                                     {!user.is_blocked && (
                                                         <button
-                                                            onClick={() => handleBlockUser(user.id, user.email)}
+                                                            onClick={() => handleBlockUser(user.id, getUserEmail(user))}
                                                             className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                             title="Block User"
                                                         >

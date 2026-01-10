@@ -1,0 +1,27 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.3
+2 info using node@v22.18.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\Mini_Project\career-automate-admin\.npmrc
+5 silly config load:file:C:\Users\shree\.npmrc
+6 silly config load:file:C:\Users\shree\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install nodemailer @types/nodemailer
+8 verbose argv "install" "nodemailer" "@types/nodemailer"
+9 verbose logfile logs-max:10 dir:D:\Mini_Project\career-automate-admin\.npm-cache\_logs\2026-01-10T01_57_35_541Z-
+10 verbose logfile D:\Mini_Project\career-automate-admin\.npm-cache\_logs\2026-01-10T01_57_35_541Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 silly idealTree buildDeps
+14 silly fetch manifest nodemailer@*
+15 silly packumentCache full:https://registry.npmjs.org/nodemailer cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/npm 412ms
+17 http fetch GET 200 https://registry.npmjs.org/nodemailer 456ms (cache miss)
+18 silly packumentCache full:https://registry.npmjs.org/nodemailer set size:undefined disposed:false
+19 silly fetch manifest @types/nodemailer@*
+20 silly packumentCache full:https://registry.npmjs.org/@types%2fnodemailer cache-miss
+21 http fetch GET 200 https://registry.npmjs.org/@types%2fnodemailer 594ms (cache miss)
+22 silly packumentCache full:https://registry.npmjs.org/@types%2fnodemailer set size:undefined disposed:false
+23 silly placeDep ROOT @types/nodemailer@7.0.4 OK for: career-automate-admin@0.1.0 want: *
+24 silly placeDep ROOT nodemailer@7.0.12 OK for: career-automate-admin@0.1.0 want: *
+25 silly fetch manifest @aws-sdk/client-sesv2@^3.839.0
+26 silly packumentCache full:https://registry.npmjs.org/@aws-sdk%2fclient-sesv2 cache-miss

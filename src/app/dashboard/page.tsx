@@ -4,10 +4,6 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent } from '@/components/ui/Card';
 import {
     Users,
-    Briefcase,
-    FileText,
-    Key,
-    TrendingUp,
     UserPlus,
     MoreVertical,
     X
@@ -16,9 +12,6 @@ import { useEffect, useState, useCallback } from 'react';
 
 interface DashboardStats {
     totalUsers: number;
-    activeJobSearchers: number;
-    pendingDocuments: number;
-    apiKeyAlerts: number;
     newSignups: number;
 }
 
@@ -31,16 +24,12 @@ interface FilterState {
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats>({
         totalUsers: 0,
-        activeJobSearchers: 0,
-        pendingDocuments: 0,
-        apiKeyAlerts: 0,
         newSignups: 0
     });
     const [loading, setLoading] = useState(true);
 
     // Filtered counts
     const [filteredTotalUsers, setFilteredTotalUsers] = useState<number | null>(null);
-    const [filteredActiveSearchers, setFilteredActiveSearchers] = useState<number | null>(null);
 
     // Filter states for each card
     const [totalUsersFilter, setTotalUsersFilter] = useState<FilterState>({
@@ -48,15 +37,9 @@ export default function DashboardPage() {
         newUsers: false,
         oldUsers: false
     });
-    const [activeSearchFilter, setActiveSearchFilter] = useState<FilterState>({
-        location: '',
-        newUsers: false,
-        oldUsers: false
-    });
 
     // Location filter modal
-    const [showLocationModal, setShowLocationModal] = useState<'totalUsers' | 'activeSearchers' | null>(null);
-    const [selectedLocation, setSelectedLocation] = useState('');
+    const [showLocationModal, setShowLocationModal] = useState<'totalUsers' | null>(null);
 
     const locations = [
         'Bangalore', 'Hyderabad', 'Mumbai', 'Delhi', 'Chennai',
@@ -76,21 +59,16 @@ export default function DashboardPage() {
         }
     }, [totalUsersFilter]);
 
-    useEffect(() => {
-        if (activeSearchFilter.location || activeSearchFilter.newUsers || activeSearchFilter.oldUsers) {
-            fetchFilteredStats('activeJobSearchers', activeSearchFilter);
-        } else {
-            setFilteredActiveSearchers(null);
-        }
-    }, [activeSearchFilter]);
-
     const fetchDashboardStats = async () => {
         try {
             const response = await fetch('/api/dashboard/stats');
             const data = await response.json();
 
             if (response.ok) {
-                setStats(data);
+                setStats({
+                    totalUsers: data.totalUsers || 0,
+                    newSignups: data.newSignups || 0
+                });
             } else {
                 console.error('Error fetching stats:', data.error);
             }
@@ -113,57 +91,31 @@ export default function DashboardPage() {
             const data = await response.json();
 
             if (response.ok) {
-                if (statType === 'totalUsers') {
-                    setFilteredTotalUsers(data.count);
-                } else {
-                    setFilteredActiveSearchers(data.count);
-                }
+                setFilteredTotalUsers(data.count);
             }
         } catch (error) {
             console.error('Error fetching filtered stats:', error);
         }
     };
 
-    const handleFilterChange = (
-        cardType: 'totalUsers' | 'activeSearchers',
-        filterKey: 'newUsers' | 'oldUsers'
-    ) => {
-        if (cardType === 'totalUsers') {
-            setTotalUsersFilter(prev => ({
-                ...prev,
-                [filterKey]: !prev[filterKey],
-                // Ensure only one time filter is active
-                ...(filterKey === 'newUsers' && !prev.newUsers ? { oldUsers: false } : {}),
-                ...(filterKey === 'oldUsers' && !prev.oldUsers ? { newUsers: false } : {})
-            }));
-        } else {
-            setActiveSearchFilter(prev => ({
-                ...prev,
-                [filterKey]: !prev[filterKey],
-                ...(filterKey === 'newUsers' && !prev.newUsers ? { oldUsers: false } : {}),
-                ...(filterKey === 'oldUsers' && !prev.oldUsers ? { newUsers: false } : {})
-            }));
-        }
+    const handleFilterChange = (filterKey: 'newUsers' | 'oldUsers') => {
+        setTotalUsersFilter(prev => ({
+            ...prev,
+            [filterKey]: !prev[filterKey],
+            // Ensure only one time filter is active
+            ...(filterKey === 'newUsers' && !prev.newUsers ? { oldUsers: false } : {}),
+            ...(filterKey === 'oldUsers' && !prev.oldUsers ? { newUsers: false } : {})
+        }));
     };
 
     const handleLocationSelect = (location: string) => {
-        if (showLocationModal === 'totalUsers') {
-            setTotalUsersFilter(prev => ({ ...prev, location }));
-        } else if (showLocationModal === 'activeSearchers') {
-            setActiveSearchFilter(prev => ({ ...prev, location }));
-        }
+        setTotalUsersFilter(prev => ({ ...prev, location }));
         setShowLocationModal(null);
-        setSelectedLocation('');
     };
 
-    const clearFilters = (cardType: 'totalUsers' | 'activeSearchers') => {
-        if (cardType === 'totalUsers') {
-            setTotalUsersFilter({ location: '', newUsers: false, oldUsers: false });
-            setFilteredTotalUsers(null);
-        } else {
-            setActiveSearchFilter({ location: '', newUsers: false, oldUsers: false });
-            setFilteredActiveSearchers(null);
-        }
+    const clearFilters = () => {
+        setTotalUsersFilter({ location: '', newUsers: false, oldUsers: false });
+        setFilteredTotalUsers(null);
     };
 
     const StatCard = ({
@@ -173,7 +125,7 @@ export default function DashboardPage() {
         icon: Icon,
         subtitle,
         filters,
-        cardType,
+        hasFilters,
         onFilterChange,
         onClearFilters,
         trend,
@@ -185,7 +137,7 @@ export default function DashboardPage() {
         icon: React.ElementType;
         subtitle?: string;
         filters?: FilterState;
-        cardType?: 'totalUsers' | 'activeSearchers';
+        hasFilters?: boolean;
         onFilterChange?: (filterKey: 'newUsers' | 'oldUsers') => void;
         onClearFilters?: () => void;
         trend?: 'up' | 'down';
@@ -223,20 +175,20 @@ export default function DashboardPage() {
                                 </p>
                             )}
                         </div>
-                        <button className="p-1 hover:bg-gray-100 rounded">
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
-                        </button>
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                            <Icon className="w-6 h-6 text-blue-600" />
+                        </div>
                     </div>
 
-                    {filters && cardType && onFilterChange && (
+                    {hasFilters && filters && onFilterChange && (
                         <div className="mt-4">
                             <div className="flex flex-wrap gap-2">
                                 {/* Location Filter */}
                                 <button
-                                    onClick={() => setShowLocationModal(cardType)}
+                                    onClick={() => setShowLocationModal('totalUsers')}
                                     className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.location
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                                         }`}
                                 >
                                     {filters.location || 'Location'}
@@ -245,11 +197,7 @@ export default function DashboardPage() {
                                             className="w-3 h-3 ml-1 inline"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                if (cardType === 'totalUsers') {
-                                                    setTotalUsersFilter(prev => ({ ...prev, location: '' }));
-                                                } else {
-                                                    setActiveSearchFilter(prev => ({ ...prev, location: '' }));
-                                                }
+                                                setTotalUsersFilter(prev => ({ ...prev, location: '' }));
                                             }}
                                         />
                                     )}
@@ -259,8 +207,8 @@ export default function DashboardPage() {
                                 <button
                                     onClick={() => onFilterChange('newUsers')}
                                     className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.newUsers
-                                            ? 'bg-green-600 text-white'
-                                            : 'bg-green-50 text-green-600 hover:bg-green-100'
+                                        ? 'bg-green-600 text-white'
+                                        : 'bg-green-50 text-green-600 hover:bg-green-100'
                                         }`}
                                 >
                                     New Users
@@ -270,8 +218,8 @@ export default function DashboardPage() {
                                 <button
                                     onClick={() => onFilterChange('oldUsers')}
                                     className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filters.oldUsers
-                                            ? 'bg-gray-700 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        ? 'bg-gray-700 text-white'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                         }`}
                                 >
                                     Old Users
@@ -298,7 +246,7 @@ export default function DashboardPage() {
             <div className="animate-fade-in">
                 <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Total Users */}
                     <StatCard
                         title="Total Users"
@@ -306,46 +254,9 @@ export default function DashboardPage() {
                         filteredValue={filteredTotalUsers}
                         icon={Users}
                         filters={totalUsersFilter}
-                        cardType="totalUsers"
-                        onFilterChange={(key) => handleFilterChange('totalUsers', key)}
-                        onClearFilters={() => clearFilters('totalUsers')}
-                    />
-
-                    {/* Active Job Searchers */}
-                    <StatCard
-                        title="Active Job Searchers"
-                        value={stats.activeJobSearchers}
-                        filteredValue={filteredActiveSearchers}
-                        icon={Briefcase}
-                        filters={activeSearchFilter}
-                        cardType="activeSearchers"
-                        onFilterChange={(key) => handleFilterChange('activeSearchers', key)}
-                        onClearFilters={() => clearFilters('activeSearchers')}
-                    />
-
-                    {/* Pending Documents */}
-                    <StatCard
-                        title="Pending Documents"
-                        value={stats.pendingDocuments}
-                        icon={FileText}
-                        subtitle={stats.pendingDocuments > 0 ? `From ${Math.ceil(stats.pendingDocuments / 2)} users` : 'All documents reviewed'}
-                    />
-
-                    {/* API Key Expiry Alerts */}
-                    <StatCard
-                        title="API Key Expiry Alerts"
-                        value={stats.apiKeyAlerts}
-                        icon={Key}
-                        subtitle={stats.apiKeyAlerts > 0 ? "Approaching expiry" : "All keys valid"}
-                    />
-
-                    {/* Revenue - Placeholder */}
-                    <StatCard
-                        title="Revenue"
-                        value={12345}
-                        icon={TrendingUp}
-                        trend="up"
-                        trendValue="+15%"
+                        hasFilters={true}
+                        onFilterChange={handleFilterChange}
+                        onClearFilters={clearFilters}
                     />
 
                     {/* New Signups */}
