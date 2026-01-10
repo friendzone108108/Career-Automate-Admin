@@ -34,7 +34,7 @@ export function Sidebar() {
                     <Link href="/dashboard" className="flex items-center gap-2">
                         <img
                             src="https://i.postimg.cc/1RvV7gcX/CA_logo_banner_transparent.png"
-                            alt="CareerAutomate Admin"
+                            alt="Career Automate Admin"
                             className="h-10 object-contain"
                         />
                     </Link>

@@ -56,7 +56,7 @@ export default function LoginPage() {
                 <div className="text-center mb-8">
                     <img
                         src="https://i.postimg.cc/1RvV7gcX/CA_logo_banner_transparent.png"
-                        alt="CareerAutomate Admin"
+                        alt="Career Automate Admin"
                         className="h-16 mx-auto mb-4 object-contain"
                     />
                     <p className="text-gray-500 mt-1">Admin Portal</p>
