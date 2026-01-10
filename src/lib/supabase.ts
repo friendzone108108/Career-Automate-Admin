@@ -1,15 +1,38 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Admin Supabase Client (for client-side authentication)
-const adminSupabaseUrl = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL!;
-const adminSupabaseAnonKey = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_ANON_KEY!;
+// Lazy-initialized admin client for client-side authentication
+let _adminSupabase: SupabaseClient | null = null;
 
-export const adminSupabase = createClient(adminSupabaseUrl, adminSupabaseAnonKey);
+export const getAdminSupabase = () => {
+    if (_adminSupabase) return _adminSupabase;
+
+    const url = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_ANON_KEY;
+
+    if (!url || !anonKey) {
+        throw new Error('Admin Supabase URL and Anon Key are required');
+    }
+
+    _adminSupabase = createClient(url, anonKey);
+    return _adminSupabase;
+};
+
+// For backward compatibility - creates client on first access
+export const adminSupabase = new Proxy({} as SupabaseClient, {
+    get(_, prop) {
+        const client = getAdminSupabase();
+        const value = (client as any)[prop];
+        if (typeof value === 'function') {
+            return value.bind(client);
+        }
+        return value;
+    }
+});
 
 // Server-side only clients - these functions should only be called from API routes or server components
 export const getAdminServiceClient = () => {
-    const url = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL!;
-    const serviceRoleKey = process.env.ADMIN_SUPABASE_SERVICE_ROLE_KEY!;
+    const url = process.env.NEXT_PUBLIC_ADMIN_SUPABASE_URL;
+    const serviceRoleKey = process.env.ADMIN_SUPABASE_SERVICE_ROLE_KEY;
 
     if (!url || !serviceRoleKey) {
         throw new Error('Admin Supabase credentials not configured');
@@ -24,8 +47,8 @@ export const getAdminServiceClient = () => {
 };
 
 export const getFrontendServiceClient = () => {
-    const url = process.env.FRONTEND_SUPABASE_URL!;
-    const serviceRoleKey = process.env.FRONTEND_SUPABASE_SERVICE_ROLE_KEY!;
+    const url = process.env.FRONTEND_SUPABASE_URL;
+    const serviceRoleKey = process.env.FRONTEND_SUPABASE_SERVICE_ROLE_KEY;
 
     if (!url || !serviceRoleKey) {
         throw new Error('Frontend Supabase credentials not configured');
@@ -39,6 +62,6 @@ export const getFrontendServiceClient = () => {
     });
 };
 
-// Legacy exports for compatibility (will throw error if used client-side without proper env vars)
+// Legacy exports for compatibility
 export const createAdminServiceClient = getAdminServiceClient;
 export const createFrontendServiceClient = getFrontendServiceClient;
