@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { adminSupabase } from '@/lib/supabase';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { adminSupabase, isSessionExpired, updateLastActivity, clearSessionData, SESSION_TIMEOUT_MS } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 interface AdminUser {
     id: string;
@@ -28,12 +29,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Session check interval (every minute)
+const SESSION_CHECK_INTERVAL = 60 * 1000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const pathname = usePathname();
 
     const fetchAdminUser = async (userId: string): Promise<AdminUser | null> => {
         try {
@@ -61,6 +66,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // Sign out function
+    const signOut = useCallback(async (showMessage = true) => {
+        try {
+            if (user && showMessage) {
+                // Log the logout activity (fire and forget)
+                adminSupabase.from('activity_logs').insert({
+                    admin_id: user.id,
+                    admin_email: user.email,
+                    action_type: 'logout',
+                    action_description: 'Admin logged out',
+                }).then(() => { });
+            }
+
+            await adminSupabase.auth.signOut();
+            clearSessionData();
+            setUser(null);
+            setAdminUser(null);
+            setSession(null);
+            router.push('/login');
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
+    }, [user, router]);
+
+    // Handle session timeout
+    const handleSessionTimeout = useCallback(async () => {
+        toast.error('Session expired due to inactivity. Please login again.', {
+            duration: 5000,
+        });
+        await signOut(false);
+
+        // Log timeout
+        if (user) {
+            adminSupabase.from('activity_logs').insert({
+                admin_id: user.id,
+                admin_email: user.email,
+                action_type: 'session_timeout',
+                action_description: 'Session expired due to 30 minutes of inactivity',
+            }).then(() => { });
+        }
+    }, [user, signOut]);
+
+    // Check session validity periodically
+    useEffect(() => {
+        if (!user || pathname === '/login') return;
+
+        const checkSession = () => {
+            if (isSessionExpired()) {
+                handleSessionTimeout();
+            }
+        };
+
+        // Check immediately
+        checkSession();
+
+        // Set up interval to check periodically
+        const intervalId = setInterval(checkSession, SESSION_CHECK_INTERVAL);
+
+        return () => clearInterval(intervalId);
+    }, [user, pathname, handleSessionTimeout]);
+
+    // Track user activity (mouse movement, keyboard, clicks)
+    useEffect(() => {
+        if (!user || pathname === '/login') return;
+
+        const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+
+        const handleActivity = () => {
+            updateLastActivity();
+        };
+
+        // Add event listeners
+        activityEvents.forEach(event => {
+            window.addEventListener(event, handleActivity, { passive: true });
+        });
+
+        return () => {
+            activityEvents.forEach(event => {
+                window.removeEventListener(event, handleActivity);
+            });
+        };
+    }, [user, pathname]);
+
     // Initialize auth state with timeout
     useEffect(() => {
         let mounted = true;
@@ -74,13 +162,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         console.warn('Auth initialization timeout - forcing load complete');
                         setLoading(false);
                     }
-                }, 5000); // 5 second timeout
+                }, 5000);
+
+                // Check if session expired before even trying to get it
+                if (isSessionExpired()) {
+                    clearSessionData();
+                    if (mounted) {
+                        setLoading(false);
+                    }
+                    return;
+                }
 
                 const { data: { session: currentSession } } = await adminSupabase.auth.getSession();
 
                 if (!mounted) return;
 
                 if (currentSession?.user) {
+                    // Update activity timestamp on successful session restore
+                    updateLastActivity();
+
                     setSession(currentSession);
                     setUser(currentSession.user);
 
@@ -109,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(newSession?.user ?? null);
 
             if (newSession?.user) {
+                updateLastActivity();
                 const adminData = await fetchAdminUser(newSession.user.id);
                 if (mounted) {
                     setAdminUser(adminData);
@@ -141,14 +242,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const adminData = await fetchAdminUser(data.user.id);
                 if (!adminData) {
                     await adminSupabase.auth.signOut();
+                    clearSessionData();
                     throw new Error('You are not authorized as an admin');
                 }
 
                 if (!adminData.is_active) {
                     await adminSupabase.auth.signOut();
+                    clearSessionData();
                     throw new Error('Your admin account has been deactivated');
                 }
 
+                // Set initial activity timestamp
+                updateLastActivity();
                 setAdminUser(adminData);
 
                 // Log the login activity (fire and forget)
@@ -163,28 +268,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return { error: null };
         } catch (error) {
             return { error: error as Error };
-        }
-    };
-
-    const signOut = async () => {
-        try {
-            if (user) {
-                // Log the logout activity (fire and forget)
-                adminSupabase.from('activity_logs').insert({
-                    admin_id: user.id,
-                    admin_email: user.email,
-                    action_type: 'logout',
-                    action_description: 'Admin logged out',
-                }).then(() => { });
-            }
-
-            await adminSupabase.auth.signOut();
-            setUser(null);
-            setAdminUser(null);
-            setSession(null);
-            router.push('/login');
-        } catch (error) {
-            console.error('Error signing out:', error);
         }
     };
 
