@@ -1,8 +1,8 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { adminSupabase, isSessionExpired, updateLastActivity, clearSessionData, SESSION_TIMEOUT_MS } from '@/lib/supabase';
+import { adminSupabase, isSessionExpired, updateLastActivity, clearSessionData } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -40,6 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
 
+    // Use refs to avoid stale closures
+    const userRef = useRef<User | null>(null);
+
+    // Keep userRef in sync with user state
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
+
     const fetchAdminUser = async (userId: string): Promise<AdminUser | null> => {
         try {
             const { data, error } = await adminSupabase
@@ -66,47 +74,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Sign out function
-    const signOut = useCallback(async (showMessage = true) => {
+    // Sign out function - uses ref to get current user value
+    const signOut = async (): Promise<void> => {
         try {
-            if (user && showMessage) {
-                // Log the logout activity (fire and forget)
-                adminSupabase.from('activity_logs').insert({
-                    admin_id: user.id,
-                    admin_email: user.email,
-                    action_type: 'logout',
-                    action_description: 'Admin logged out',
-                }).then(() => { });
+            const currentUser = userRef.current;
+
+            // Log the logout activity before signing out
+            if (currentUser) {
+                try {
+                    await adminSupabase.from('activity_logs').insert({
+                        admin_id: currentUser.id,
+                        admin_email: currentUser.email,
+                        action_type: 'logout',
+                        action_description: 'Admin logged out',
+                    });
+                } catch (logError) {
+                    console.error('Error logging logout:', logError);
+                }
             }
 
+            // Sign out from Supabase
             await adminSupabase.auth.signOut();
+
+            // Clear all session data
             clearSessionData();
+
+            // Clear state
             setUser(null);
             setAdminUser(null);
             setSession(null);
+
+            // Redirect to login
             router.push('/login');
+
+            toast.success('Signed out successfully');
         } catch (error) {
             console.error('Error signing out:', error);
+            toast.error('Error signing out. Please try again.');
         }
-    }, [user, router]);
+    };
 
     // Handle session timeout
-    const handleSessionTimeout = useCallback(async () => {
+    const handleSessionTimeout = async () => {
+        const currentUser = userRef.current;
+
         toast.error('Session expired due to inactivity. Please login again.', {
             duration: 5000,
         });
-        await signOut(false);
 
         // Log timeout
-        if (user) {
-            adminSupabase.from('activity_logs').insert({
-                admin_id: user.id,
-                admin_email: user.email,
-                action_type: 'session_timeout',
-                action_description: 'Session expired due to 30 minutes of inactivity',
-            }).then(() => { });
+        if (currentUser) {
+            try {
+                await adminSupabase.from('activity_logs').insert({
+                    admin_id: currentUser.id,
+                    admin_email: currentUser.email,
+                    action_type: 'session_timeout',
+                    action_description: 'Session expired due to 30 minutes of inactivity',
+                });
+            } catch (logError) {
+                console.error('Error logging timeout:', logError);
+            }
         }
-    }, [user, signOut]);
+
+        // Sign out
+        await adminSupabase.auth.signOut();
+        clearSessionData();
+        setUser(null);
+        setAdminUser(null);
+        setSession(null);
+        router.push('/login');
+    };
 
     // Check session validity periodically
     useEffect(() => {
@@ -125,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const intervalId = setInterval(checkSession, SESSION_CHECK_INTERVAL);
 
         return () => clearInterval(intervalId);
-    }, [user, pathname, handleSessionTimeout]);
+    }, [user, pathname]);
 
     // Track user activity (mouse movement, keyboard, clicks)
     useEffect(() => {

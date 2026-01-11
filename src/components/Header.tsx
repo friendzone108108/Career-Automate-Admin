@@ -75,7 +75,10 @@ export function Header() {
                             </Link>
 
                             <button
-                                onClick={signOut}
+                                onClick={async () => {
+                                    setShowDropdown(false);
+                                    await signOut();
+                                }}
                                 className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
                             >
                                 <LogOut className="w-4 h-4" />
