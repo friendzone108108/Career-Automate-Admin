@@ -5,17 +5,13 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import {
     Briefcase,
     Play,
     Loader2,
-    Clock,
     CheckCircle2,
-    XCircle,
-    RefreshCw,
     MapPin,
     Building2,
     Hash,
@@ -80,18 +76,19 @@ export default function JobFetcherPage() {
 
     // UI state
     const [fetching, setFetching] = useState(false);
-    const [loadingHistory, setLoadingHistory] = useState(true);
     const [fetchRuns, setFetchRuns] = useState<FetchRun[]>([]);
     const [lastRunResult, setLastRunResult] = useState<{ run_id: string; status: string; message: string } | null>(null);
 
+    // Check if any job is currently running
+    const isJobRunning = fetchRuns.some(run => run.status === 'started' || run.status === 'running');
+
     useEffect(() => {
-        loadFetchHistory();
+        checkRunningJobs();
     }, []);
 
-    const loadFetchHistory = async () => {
-        setLoadingHistory(true);
+    const checkRunningJobs = async () => {
         try {
-            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=10`, {
+            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=5`, {
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`
                 }
@@ -102,9 +99,7 @@ export default function JobFetcherPage() {
                 setFetchRuns(data.runs || []);
             }
         } catch (error) {
-            console.error('Error loading fetch history:', error);
-        } finally {
-            setLoadingHistory(false);
+            console.error('Error checking running jobs:', error);
         }
     };
 
@@ -158,9 +153,9 @@ export default function JobFetcherPage() {
             setLastRunResult(data);
             toast.success('Job fetch started successfully!');
 
-            // Reload history after a short delay
+            // Reload running status after a short delay
             setTimeout(() => {
-                loadFetchHistory();
+                checkRunningJobs();
             }, 2000);
 
         } catch (error: any) {
@@ -169,30 +164,6 @@ export default function JobFetcherPage() {
         } finally {
             setFetching(false);
         }
-    };
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'completed':
-                return <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Completed</Badge>;
-            case 'started':
-            case 'running':
-                return <Badge variant="warning" className="gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Running</Badge>;
-            case 'failed':
-                return <Badge variant="danger" className="gap-1"><XCircle className="w-3 h-3" /> Failed</Badge>;
-            default:
-                return <Badge variant="secondary">{status}</Badge>;
-        }
-    };
-
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
     };
 
     return (
@@ -365,69 +336,26 @@ export default function JobFetcherPage() {
                         </Card>
                     </div>
 
-                    {/* Right Column - History */}
+                    {/* Right Column - Running Indicator */}
                     <div>
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <Clock className="w-5 h-5 text-gray-600" />
-                                        Recent Runs
-                                    </CardTitle>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={loadFetchHistory}
-                                        disabled={loadingHistory}
-                                    >
-                                        <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                {loadingHistory ? (
-                                    <div className="flex items-center justify-center py-8">
-                                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                        {/* Only show if a job is currently running */}
+                        {isJobRunning && (
+                            <Card className="border-orange-200 bg-orange-50">
+                                <CardContent className="p-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-3 bg-orange-100 rounded-full">
+                                            <Loader2 className="w-6 h-6 text-orange-600 animate-spin" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-orange-800">Job Fetch in Progress</h3>
+                                            <p className="text-sm text-orange-600">
+                                                A job fetch is currently running. Please wait for it to complete.
+                                            </p>
+                                        </div>
                                     </div>
-                                ) : fetchRuns.length === 0 ? (
-                                    <div className="text-center py-8 text-gray-500">
-                                        <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                        <p>No fetch runs yet</p>
-                                        <p className="text-xs">Start your first job fetch above!</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {fetchRuns.map((run) => (
-                                            <div
-                                                key={run.id}
-                                                className="p-3 bg-gray-50 rounded-lg border border-gray-100"
-                                            >
-                                                <div className="flex items-center justify-between mb-2">
-                                                    {getStatusBadge(run.status)}
-                                                    <span className="text-xs text-gray-500">
-                                                        {run.portal}
-                                                    </span>
-                                                </div>
-                                                <div className="text-xs text-gray-600 space-y-1">
-                                                    <p>Started: {formatDate(run.started_at)}</p>
-                                                    {run.finished_at && (
-                                                        <p>Finished: {formatDate(run.finished_at)}</p>
-                                                    )}
-                                                    <div className="flex gap-4 mt-2 pt-2 border-t border-gray-200">
-                                                        <span>
-                                                            <strong>{run.jobs_found}</strong> found
-                                                        </span>
-                                                        <span className="text-green-600">
-                                                            <strong>{run.new_jobs_added}</strong> new
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 </div>
             </div>
