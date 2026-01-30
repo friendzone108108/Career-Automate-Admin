@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useEffect, useState } from 'react';
-import { createAdminServiceClient, createFrontendServiceClient } from '@/lib/supabase';
+import { createAdminServiceClient } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ export default function NotificationsPage() {
     const [message, setMessage] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; primary_email?: string } | null>(null);
+    const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; full_name: string } | null>(null);
     const [searchLoading, setSearchLoading] = useState(false);
 
     useEffect(() => {
@@ -69,53 +69,18 @@ export default function NotificationsPage() {
 
         setSearchLoading(true);
         try {
-            const frontendClient = createFrontendServiceClient();
+            // Use the API endpoint to search users (it has access to auth.users)
+            const response = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
+            const data = await response.json();
 
-            // Search in profiles for primary_email and users for email
-            const { data: profiles } = await frontendClient
-                .from('profiles')
-                .select('id, full_name, primary_email')
-                .or(`full_name.ilike.%${searchQuery}%,primary_email.ilike.%${searchQuery}%`)
-                .limit(10);
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to search users');
+            }
 
-            const { data: users } = await frontendClient
-                .from('users')
-                .select('id, email')
-                .ilike('email', `%${searchQuery}%`)
-                .limit(10);
-
-            // Combine results
-            const results: any[] = [];
-            const seenIds = new Set();
-
-            profiles?.forEach(p => {
-                if (!seenIds.has(p.id)) {
-                    seenIds.add(p.id);
-                    const user = users?.find(u => u.id === p.id);
-                    results.push({
-                        id: p.id,
-                        full_name: p.full_name || 'Unknown',
-                        email: user?.email || '',
-                        primary_email: p.primary_email
-                    });
-                }
-            });
-
-            users?.forEach(u => {
-                if (!seenIds.has(u.id)) {
-                    seenIds.add(u.id);
-                    results.push({
-                        id: u.id,
-                        full_name: 'Unknown',
-                        email: u.email,
-                        primary_email: null
-                    });
-                }
-            });
-
-            setSearchResults(results);
+            setSearchResults(data.users || []);
         } catch (error) {
             console.error('Error searching users:', error);
+            setSearchResults([]);
         } finally {
             setSearchLoading(false);
         }
@@ -150,7 +115,7 @@ export default function NotificationsPage() {
             };
 
             if (targetAudience === 'single' && selectedUser) {
-                emailPayload.recipientEmail = selectedUser.primary_email || selectedUser.email;
+                emailPayload.recipientEmail = selectedUser.email;
                 emailPayload.recipientId = selectedUser.id;
             }
 
@@ -173,7 +138,7 @@ export default function NotificationsPage() {
                 .insert({
                     target_audience: targetAudience,
                     target_user_id: targetAudience === 'single' ? selectedUser?.id : null,
-                    target_user_email: targetAudience === 'single' ? (selectedUser?.primary_email || selectedUser?.email) : null,
+                    target_user_email: targetAudience === 'single' ? selectedUser?.email : null,
                     notification_type: notificationType,
                     message: message,
                     delivery_status: 'delivered',
@@ -186,7 +151,7 @@ export default function NotificationsPage() {
                 admin_id: adminUser?.id,
                 admin_email: adminUser?.email,
                 action_type: 'send_notification',
-                action_description: `Sent ${notificationType} email to ${targetAudience === 'all' ? 'all users' : (selectedUser?.primary_email || selectedUser?.email)}`,
+                action_description: `Sent ${notificationType} email to ${targetAudience === 'all' ? 'all users' : selectedUser?.email}`,
                 metadata: { type: notificationType, audience: targetAudience, emailsSent: result.emailsSent || 1 }
             });
 
@@ -304,12 +269,12 @@ export default function NotificationsPage() {
                                                         onClick={() => {
                                                             setSelectedUser(user);
                                                             setSearchResults([]);
-                                                            setSearchQuery(user.primary_email || user.email);
+                                                            setSearchQuery(user.email);
                                                         }}
                                                         className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50"
                                                     >
                                                         <p className="font-medium text-gray-900">{user.full_name}</p>
-                                                        <p className="text-gray-500 text-xs">{user.primary_email || user.email}</p>
+                                                        <p className="text-gray-500 text-xs">{user.email}</p>
                                                     </button>
                                                 ))}
                                             </div>
@@ -318,7 +283,7 @@ export default function NotificationsPage() {
                                         {selectedUser && (
                                             <div className="mt-2 p-2 bg-green-50 rounded-lg flex items-center justify-between">
                                                 <p className="text-sm text-green-700">
-                                                    <span className="font-medium">Selected:</span> {selectedUser.primary_email || selectedUser.email}
+                                                    <span className="font-medium">Selected:</span> {selectedUser.full_name} ({selectedUser.email})
                                                 </p>
                                                 <button
                                                     onClick={() => {

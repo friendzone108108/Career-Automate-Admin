@@ -93,13 +93,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
             }
 
-            // Sign out from Supabase
+            //Sign out from Supabase
             await adminSupabase.auth.signOut();
 
-            // Clear all session data
+            //Clear all session data
             clearSessionData();
 
-            // Clear state
+            //Clear state
             setUser(null);
             setAdminUser(null);
             setSession(null);

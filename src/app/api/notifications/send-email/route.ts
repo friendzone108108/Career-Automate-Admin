@@ -65,27 +65,34 @@ export async function POST(request: NextRequest) {
             });
             emailsSent = 1;
         } else if (targetAudience === 'all') {
-            // Fetch all users with primary_email
+            // Fetch all users using Admin API
             const frontendClient = createFrontendServiceClient();
 
+            // Use Admin API to list all users
+            const { data: authData, error: authError } = await frontendClient.auth.admin.listUsers({
+                perPage: 1000
+            });
+
+            if (authError) {
+                console.error('Error listing users:', authError);
+                throw new Error('Failed to fetch users');
+            }
+
+            // Get secondary emails from profiles
             const { data: profiles } = await frontendClient
                 .from('profiles')
-                .select('primary_email')
-                .not('primary_email', 'is', null);
-
-            const { data: users } = await frontendClient
-                .from('users')
-                .select('email');
+                .select('id, secondary_email')
+                .not('secondary_email', 'is', null);
 
             // Collect all unique emails
             const emails = new Set<string>();
 
-            profiles?.forEach(p => {
-                if (p.primary_email) emails.add(p.primary_email);
+            authData.users?.forEach(u => {
+                if (u.email) emails.add(u.email);
             });
 
-            users?.forEach(u => {
-                if (u.email) emails.add(u.email);
+            profiles?.forEach(p => {
+                if (p.secondary_email) emails.add(p.secondary_email);
             });
 
             const emailList = Array.from(emails);
