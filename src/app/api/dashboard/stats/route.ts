@@ -62,12 +62,35 @@ export async function GET() {
             console.error('Error fetching signups:', signupsError);
         }
 
+        // Fetch signups from the previous 7 days (for trend calculation)
+        const fourteenDaysAgo = new Date();
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+        const { count: prevWeekSignups, error: prevSignupsError } = await frontendClient
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString());
+
+        if (prevSignupsError) {
+            console.error('Error fetching previous week signups:', prevSignupsError);
+        }
+
+        // Calculate trend percentage
+        let trendPercent = 0;
+        if (prevWeekSignups && prevWeekSignups > 0) {
+            trendPercent = Math.round(((newSignups || 0) - prevWeekSignups) / prevWeekSignups * 100);
+        } else if (newSignups && newSignups > 0) {
+            trendPercent = 100; // All new users
+        }
+
         return NextResponse.json({
             totalUsers: totalUsers || 0,
             activeJobSearchers: activeJobSearchers || 0,
             pendingDocuments: pendingDocs || 0,
             apiKeyAlerts: apiAlerts || 0,
-            newSignups: newSignups || 0
+            newSignups: newSignups || 0,
+            signupTrend: trendPercent
         });
     } catch (error) {
         console.error('Dashboard stats error:', error);

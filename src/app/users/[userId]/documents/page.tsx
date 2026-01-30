@@ -11,7 +11,21 @@ import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink, FileText } from 'lucide-react';
+
+// Frontend Supabase storage URL
+const FRONTEND_SUPABASE_URL = process.env.NEXT_PUBLIC_FRONTEND_SUPABASE_URL || 'https://sapmqweflhqfprkjoikk.supabase.co';
+
+// Helper function to get the full storage URL
+const getStorageUrl = (fileUrl: string | null): string | null => {
+    if (!fileUrl) return null;
+    // If it's already a full URL, return as-is
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+        return fileUrl;
+    }
+    // Otherwise, construct the storage URL
+    return `${FRONTEND_SUPABASE_URL}/storage/v1/object/public/documents/${fileUrl}`;
+};
 
 interface DocumentItem {
     id: string;
@@ -59,16 +73,13 @@ export default function UserDocumentsPage() {
                 .eq('id', userId)
                 .single();
 
-            const { data: userData } = await frontendClient
-                .from('users')
-                .select('email')
-                .eq('id', userId)
-                .single();
+            // Fetch user email using Admin API
+            const { data: authUser, error: authError } = await frontendClient.auth.admin.getUserById(userId);
 
-            if (profile && userData) {
+            if (profile) {
                 setUserInfo({
                     full_name: profile.full_name || 'Unknown User',
-                    email: userData.email
+                    email: authUser?.user?.email || 'Unknown'
                 });
             }
 
@@ -375,7 +386,7 @@ export default function UserDocumentsPage() {
                                                     </button>
                                                     {doc.file_url && (
                                                         <a
-                                                            href={doc.file_url}
+                                                            href={getStorageUrl(doc.file_url) || '#'}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"

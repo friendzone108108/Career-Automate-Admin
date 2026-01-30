@@ -74,15 +74,19 @@ export async function GET(request: NextRequest) {
         // Get user IDs for joining with other tables
         const userIds = profiles.map(p => p.id);
 
-        // Fetch user emails from auth.users (via users table)
-        const { data: usersData, error: usersError } = await frontendClient
-            .from('users')
-            .select('id, email, is_verified')
-            .in('id', userIds);
+        // Fetch user emails from auth.users using Admin API
+        const { data: authData, error: authError } = await frontendClient.auth.admin.listUsers({
+            perPage: 1000
+        });
 
-        if (usersError) {
-            console.error('Error fetching users data:', usersError);
+        if (authError) {
+            console.error('Error fetching auth users:', authError);
         }
+
+        // Create a map of user emails
+        const userEmailMap = new Map(
+            authData?.users?.map(u => [u.id, { email: u.email, is_verified: u.email_confirmed_at !== null }]) || []
+        );
 
         // Fetch job search status
         const { data: jobStatus, error: jobError } = await frontendClient
@@ -121,7 +125,7 @@ export async function GET(request: NextRequest) {
 
         // Combine all data
         const usersWithDetails = filteredProfiles.map(profile => {
-            const userInfo = usersData?.find(u => u.id === profile.id);
+            const userInfo = userEmailMap.get(profile.id);
             const jobInfo = jobStatus?.find(j => j.user_id === profile.id);
             const isBlocked = blockedUserIds.has(profile.id);
 

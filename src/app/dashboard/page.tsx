@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react';
 interface DashboardStats {
     totalUsers: number;
     newSignups: number;
+    signupTrend: number;
 }
 
 interface FilterState {
@@ -24,7 +25,8 @@ interface FilterState {
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats>({
         totalUsers: 0,
-        newSignups: 0
+        newSignups: 0,
+        signupTrend: 0
     });
     const [loading, setLoading] = useState(true);
 
@@ -67,7 +69,8 @@ export default function DashboardPage() {
             if (response.ok) {
                 setStats({
                     totalUsers: data.totalUsers || 0,
-                    newSignups: data.newSignups || 0
+                    newSignups: data.newSignups || 0,
+                    signupTrend: data.signupTrend || 0
                 });
             } else {
                 console.error('Error fetching stats:', data.error);
@@ -264,8 +267,8 @@ export default function DashboardPage() {
                         title="New Signups (7 days)"
                         value={stats.newSignups}
                         icon={UserPlus}
-                        trend="up"
-                        trendValue="+8%"
+                        trend={stats.signupTrend >= 0 ? 'up' : 'down'}
+                        trendValue={stats.signupTrend !== 0 ? `${stats.signupTrend >= 0 ? '+' : ''}${stats.signupTrend}%` : undefined}
                     />
                 </div>
             </div>
