@@ -104,8 +104,6 @@ export default function NotificationsPage() {
 
         setSending(true);
         try {
-            const adminClient = createAdminServiceClient();
-
             // Send email via API
             const emailPayload: any = {
                 subject: subject,
@@ -132,30 +130,38 @@ export default function NotificationsPage() {
                 throw new Error(result.error || 'Failed to send email');
             }
 
-            // Create broadcast notification record
-            await adminClient
-                .from('broadcast_notifications')
-                .insert({
-                    target_audience: targetAudience,
-                    target_user_id: targetAudience === 'single' ? selectedUser?.id : null,
-                    target_user_email: targetAudience === 'single' ? selectedUser?.email : null,
-                    notification_type: notificationType,
-                    message: message,
-                    delivery_status: 'delivered',
-                    delivered_at: new Date().toISOString(),
-                    created_by: adminUser?.id
+            // Try to log to admin database (optional - don't fail if not available)
+            try {
+                const adminClient = createAdminServiceClient();
+
+                // Create broadcast notification record
+                await adminClient
+                    .from('broadcast_notifications')
+                    .insert({
+                        target_audience: targetAudience,
+                        target_user_id: targetAudience === 'single' ? selectedUser?.id : null,
+                        target_user_email: targetAudience === 'single' ? selectedUser?.email : null,
+                        notification_type: notificationType,
+                        message: message,
+                        delivery_status: 'delivered',
+                        delivered_at: new Date().toISOString(),
+                        created_by: adminUser?.id
+                    });
+
+                // Log the action
+                await adminClient.from('activity_logs').insert({
+                    admin_id: adminUser?.id,
+                    admin_email: adminUser?.email,
+                    action_type: 'send_notification',
+                    action_description: `Sent ${notificationType} email to ${targetAudience === 'all' ? 'all users' : selectedUser?.email}`,
+                    metadata: { type: notificationType, audience: targetAudience, emailsSent: result.emailsSent || 1 }
                 });
+            } catch (logError) {
+                // Logging failed but email was sent - don't fail the operation
+                console.warn('Failed to log notification to admin database:', logError);
+            }
 
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'send_notification',
-                action_description: `Sent ${notificationType} email to ${targetAudience === 'all' ? 'all users' : selectedUser?.email}`,
-                metadata: { type: notificationType, audience: targetAudience, emailsSent: result.emailsSent || 1 }
-            });
-
-            toast.success(`Email sent successfully${result.emailsSent ? ` to ${result.emailsSent} users` : ''}`);
+            toast.success(`Email sent successfully${result.emailsSent ? ` to ${result.emailsSent} users` : ''}!`);
             setMessage('');
             setSubject('');
             setSelectedUser(null);
