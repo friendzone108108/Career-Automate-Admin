@@ -44,21 +44,21 @@ export default function ControlPage() {
 
             // Fetch emergency stop status
             const { data: emergencyData } = await adminClient
-                .from('system_settings')
-                .select('setting_value')
-                .eq('setting_key', 'emergency_stop')
+                .from('system_controls')
+                .select('control_value')
+                .eq('control_key', 'emergency_stop')
                 .single();
 
-            setEmergencyStopActive(emergencyData?.setting_value === 'true');
+            setEmergencyStopActive(emergencyData?.control_value === true);
 
             // Fetch all automations stopped status
             const { data: allStoppedData } = await adminClient
-                .from('system_settings')
-                .select('setting_value')
-                .eq('setting_key', 'all_automations_stopped')
+                .from('system_controls')
+                .select('control_value')
+                .eq('control_key', 'automations_stopped')
                 .single();
 
-            setAllAutomationsStopped(allStoppedData?.setting_value === 'true');
+            setAllAutomationsStopped(allStoppedData?.control_value === true);
         } catch (error) {
             console.error('Error fetching system status:', error);
         } finally {
@@ -139,7 +139,7 @@ export default function ControlPage() {
                     'Authorization': `Bearer ${session?.access_token}`
                 },
                 body: JSON.stringify({
-                    controlKey: 'all_automations_stopped',
+                    controlKey: 'automations_stopped',
                     controlValue: newStatus,
                     adminEmail: adminUser?.email,
                     adminId: adminUser?.id,

@@ -34,42 +34,46 @@ export async function POST(request: NextRequest) {
         const adminClient = createAdminServiceClient();
         const frontendClient = createFrontendServiceClient();
 
-        // Update admin DB
+        // Update admin DB - system_controls
         const { error: adminError } = await adminClient
-            .from('system_settings')
+            .from('system_controls')
             .upsert({
-                setting_key: controlKey,
-                setting_value: controlValue.toString(),
+                control_key: controlKey,
+                control_value: controlValue,
                 updated_by: adminId,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'setting_key' });
+            }, { onConflict: 'control_key' });
 
         if (adminError) {
             console.error('Error updating admin DB:', adminError);
-            // Continue - we still want to update frontend DB
+            // Continue - try updating frontend DB as well
         }
 
-        // Map admin setting keys to frontend control keys
-        const frontendControlKey = controlKey === 'emergency_stop'
-            ? 'emergency_stop'
-            : 'automations_stopped';
+        // Map control keys if necessary (standardized to match DB schema)
+        const frontendControlKey = controlKey;
 
         // Update frontend DB
+        // If they are the same DB, this might be redundant but harmless (upsert)
         const { error: frontendError } = await frontendClient
             .from('system_controls')
-            .update({
+            .upsert({
+                control_key: frontendControlKey,
                 control_value: controlValue,
                 updated_at: new Date().toISOString(),
                 updated_by: adminEmail
-            })
-            .eq('control_key', frontendControlKey);
+            }, { onConflict: 'control_key' });
+        // Note: Changed .update() to .upsert() to be safe if row missing
 
         if (frontendError) {
             console.error('Error updating frontend DB:', frontendError);
-            return NextResponse.json(
-                { error: 'Failed to update frontend controls', details: frontendError.message },
-                { status: 500 }
-            );
+            // If admin update succeeded, we can return success, but log this error.
+            // If both failed, we should probably return error.
+            if (adminError) {
+                return NextResponse.json(
+                    { error: 'Failed to update controls', details: frontendError.message },
+                    { status: 500 }
+                );
+            }
         }
 
         // Log the action

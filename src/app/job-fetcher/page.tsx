@@ -113,12 +113,12 @@ export default function JobFetcherPage() {
         try {
             const adminClient = createAdminServiceClient();
             const { data } = await adminClient
-                .from('system_settings')
-                .select('setting_value')
-                .eq('setting_key', 'all_automations_stopped')
+                .from('system_controls')
+                .select('control_value')
+                .eq('control_key', 'automations_stopped')
                 .single();
 
-            setAutomationsStopped(data?.setting_value === 'true');
+            setAutomationsStopped(data?.control_value === true);
         } catch (error) {
             console.error('Error checking automations status:', error);
         }
@@ -456,16 +456,16 @@ export default function JobFetcherPage() {
 
                                         return (
                                             <div key={run.id} className={`p-3 rounded-lg border ${run.status === 'completed' ? 'bg-green-50 border-green-200' :
-                                                    run.status === 'failed' ? 'bg-red-50 border-red-200' :
-                                                        isStuck ? 'bg-gray-50 border-gray-200' :
-                                                            'bg-yellow-50 border-yellow-200'
+                                                run.status === 'failed' ? 'bg-red-50 border-red-200' :
+                                                    isStuck ? 'bg-gray-50 border-gray-200' :
+                                                        'bg-yellow-50 border-yellow-200'
                                                 }`}>
                                                 <div className="flex items-center justify-between mb-1">
                                                     <span className="text-xs font-medium text-gray-700">{run.portal}</span>
                                                     <span className={`text-xs px-2 py-0.5 rounded-full ${run.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                            run.status === 'failed' ? 'bg-red-100 text-red-700' :
-                                                                isStuck ? 'bg-gray-200 text-gray-700' :
-                                                                    'bg-yellow-100 text-yellow-800'
+                                                        run.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                                            isStuck ? 'bg-gray-200 text-gray-700' :
+                                                                'bg-yellow-100 text-yellow-800'
                                                         }`}>
                                                         {isStuck ? 'Stalled' : run.status}
                                                     </span>
