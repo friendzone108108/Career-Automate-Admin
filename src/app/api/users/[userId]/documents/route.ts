@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFrontendServiceClient, getAdminServiceClient } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ userId: string }> }
 ) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const { userId } = await params;
 
