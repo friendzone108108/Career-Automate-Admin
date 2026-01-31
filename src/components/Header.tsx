@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Settings, User, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 export function Header() {
     const { adminUser, signOut } = useAuth();
     const [showDropdown, setShowDropdown] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -20,6 +21,13 @@ export function Header() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleSignOut = async () => {
+        setSigningOut(true);
+        setShowDropdown(false);
+        await signOut();
+        // Note: signOut uses window.location.href so page will reload
+    };
 
     return (
         <header className="fixed top-0 right-0 left-64 z-30 h-16 bg-white border-b border-gray-200 px-6">
@@ -38,6 +46,7 @@ export function Header() {
                     <button
                         onClick={() => setShowDropdown(!showDropdown)}
                         className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        disabled={signingOut}
                     >
                         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden">
                             {adminUser?.profile_photo_url ? (
@@ -75,14 +84,21 @@ export function Header() {
                             </Link>
 
                             <button
-                                onClick={async () => {
-                                    setShowDropdown(false);
-                                    await signOut();
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                                onClick={handleSignOut}
+                                disabled={signingOut}
+                                className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left disabled:opacity-50"
                             >
-                                <LogOut className="w-4 h-4" />
-                                Sign out
+                                {signingOut ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Signing out...
+                                    </>
+                                ) : (
+                                    <>
+                                        <LogOut className="w-4 h-4" />
+                                        Sign out
+                                    </>
+                                )}
                             </button>
                         </div>
                     )}

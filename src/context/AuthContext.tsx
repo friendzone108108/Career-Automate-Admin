@@ -93,21 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
             }
 
-            //Sign out from Supabase
+            // Sign out from Supabase
             await adminSupabase.auth.signOut();
 
-            //Clear all session data
+            // Clear all session data
             clearSessionData();
 
-            //Clear state
+            // Clear state immediately
             setUser(null);
             setAdminUser(null);
             setSession(null);
 
-            // Redirect to login
-            router.push('/login');
-
+            // Show success message
             toast.success('Signed out successfully');
+
+            // Use window.location for hard navigation to ensure full page reload
+            // This clears all cached content and React state
+            window.location.href = '/login';
         } catch (error) {
             console.error('Error signing out:', error);
             toast.error('Error signing out. Please try again.');
