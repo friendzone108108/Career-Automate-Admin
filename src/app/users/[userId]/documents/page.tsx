@@ -83,30 +83,12 @@ export default function UserDocumentsPage() {
                 });
             }
 
-            // Fetch certificates
-            const { data: certificates } = await frontendClient
-                .from('certificates')
-                .select('id, certificate_name, certificate_url, created_at')
-                .eq('user_id', userId);
-
-            // Fetch certificate_documents
-            const { data: certDocs } = await frontendClient
-                .from('certificate_documents')
-                .select('id, document_name, document_type, file_url, created_at')
-                .eq('user_id', userId);
-
-            // Fetch documents (resumes etc)
+            // Fetch only resumes/documents from documents table
             const { data: docs } = await frontendClient
                 .from('documents')
-                .select('id, title, document_type, file_url, created_at')
-                .eq('user_id', userId);
-
-            // Fetch profile photo and govt ID
-            const { data: profileData } = await frontendClient
-                .from('profiles')
-                .select('profile_photo_url, govt_id_url')
-                .eq('id', userId)
-                .single();
+                .select('id, title, document_type, file_url, created_at, role')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
 
             // Fetch existing verifications from admin DB
             const { data: verifications } = await adminClient
@@ -118,43 +100,15 @@ export default function UserDocumentsPage() {
                 verifications?.map(v => [v.document_id, { status: v.status, ocr: v.ocr_extracted }]) || []
             );
 
-            // Combine all documents
+            // Map resumes to display format
             const allDocs: DocumentItem[] = [];
-
-            // Add certificates
-            certificates?.forEach(cert => {
-                const verification = verificationMap.get(cert.id);
-                allDocs.push({
-                    id: cert.id,
-                    document_type: 'Certification',
-                    upload_date: cert.created_at,
-                    file_url: cert.certificate_url,
-                    source_table: 'certificates',
-                    status: verification?.status || 'pending',
-                    ocr_extracted: verification?.ocr || false
-                });
-            });
-
-            // Add certificate documents
-            certDocs?.forEach(doc => {
-                const verification = verificationMap.get(doc.id);
-                allDocs.push({
-                    id: doc.id,
-                    document_type: doc.document_type || doc.document_name,
-                    upload_date: doc.created_at,
-                    file_url: doc.file_url,
-                    source_table: 'certificate_documents',
-                    status: verification?.status || 'pending',
-                    ocr_extracted: verification?.ocr || false
-                });
-            });
 
             // Add resumes/documents
             docs?.forEach(doc => {
                 const verification = verificationMap.get(doc.id);
                 allDocs.push({
                     id: doc.id,
-                    document_type: doc.document_type === 'resume' ? 'Resume' : doc.title,
+                    document_type: doc.role ? `Resume - ${doc.role}` : (doc.title || 'Resume'),
                     upload_date: doc.created_at,
                     file_url: doc.file_url,
                     source_table: 'documents',
@@ -162,32 +116,6 @@ export default function UserDocumentsPage() {
                     ocr_extracted: verification?.ocr || false
                 });
             });
-
-            // Add profile photo if exists
-            if (profileData?.profile_photo_url) {
-                allDocs.push({
-                    id: `${userId}_profile_photo`,
-                    document_type: 'Profile Photo',
-                    upload_date: new Date().toISOString(),
-                    file_url: profileData.profile_photo_url,
-                    source_table: 'profiles',
-                    status: verificationMap.get(`${userId}_profile_photo`)?.status || 'pending',
-                    ocr_extracted: false
-                });
-            }
-
-            // Add govt ID if exists
-            if (profileData?.govt_id_url) {
-                allDocs.push({
-                    id: `${userId}_govt_id`,
-                    document_type: 'Government ID',
-                    upload_date: new Date().toISOString(),
-                    file_url: profileData.govt_id_url,
-                    source_table: 'profiles',
-                    status: verificationMap.get(`${userId}_govt_id`)?.status || 'pending',
-                    ocr_extracted: false
-                });
-            }
 
             setDocuments(allDocs);
         } catch (error) {
@@ -312,14 +240,14 @@ export default function UserDocumentsPage() {
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
                     <Link href="/users" className="hover:text-blue-600">User Management</Link>
                     <ChevronRight className="w-4 h-4" />
-                    <span className="text-gray-900">Manage Certificates</span>
+                    <span className="text-gray-900">View Resumes</span>
                 </div>
 
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">Document Management</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Generated Resumes</h1>
                     <p className="text-gray-500 mt-1">
-                        Manage user documents{userInfo ? ` for ${userInfo.full_name}` : ''}.
+                        View AI-generated resumes{userInfo ? ` for ${userInfo.full_name}` : ''}.
                     </p>
                 </div>
 
@@ -329,7 +257,7 @@ export default function UserDocumentsPage() {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Document Type</th>
+                                    <th>Resume Title</th>
                                     <th>Upload Date</th>
                                     <th>OCR Extract</th>
                                     <th>Status</th>
@@ -350,7 +278,7 @@ export default function UserDocumentsPage() {
                                 ) : documents.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="text-center py-8 text-gray-500">
-                                            No documents found for this user
+                                            No resumes found for this user
                                         </td>
                                     </tr>
                                 ) : (
