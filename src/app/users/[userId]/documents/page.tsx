@@ -6,12 +6,11 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { createAdminServiceClient } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { ChevronRight, ExternalLink, FileText } from 'lucide-react';
+import { ChevronRight, ExternalLink, FileText, Loader2 } from 'lucide-react';
 
 // Frontend Supabase storage URL
 const FRONTEND_SUPABASE_URL = process.env.NEXT_PUBLIC_FRONTEND_SUPABASE_URL || 'https://sapmqweflhqfprkjoikk.supabase.co';
@@ -34,7 +33,6 @@ interface DocumentItem {
     file_url: string | null;
     source_table: string;
     status: 'pending' | 'approved' | 'rejected';
-    ocr_extracted: boolean;
 }
 
 interface UserInfo {
@@ -51,8 +49,7 @@ export default function UserDocumentsPage() {
     const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [loading, setLoading] = useState(true);
-    const [rejectionNotes, setRejectionNotes] = useState('');
-    const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+    const [processingDoc, setProcessingDoc] = useState<string | null>(null);
 
     useEffect(() => {
         if (userId) {
@@ -81,74 +78,36 @@ export default function UserDocumentsPage() {
         }
     };
 
-    const handleApprove = async (docId: string, docType: string, sourceTable: string) => {
+    const handleAction = async (docId: string, docType: string, sourceTable: string, action: 'approve' | 'reject') => {
+        setProcessingDoc(docId);
         try {
-            const adminClient = createAdminServiceClient();
-
-            await adminClient.from('document_verifications').upsert({
-                user_id: userId,
-                document_id: docId,
-                document_type: docType,
-                document_table: sourceTable,
-                status: 'approved',
-                verified_by: adminUser?.id,
-                verified_at: new Date().toISOString()
-            }, { onConflict: 'document_id' });
-
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'approve_document',
-                action_description: `Approved ${docType} for user`,
-                target_user_id: userId,
-                target_user_email: userInfo?.email
+            const response = await fetch(`/api/users/${userId}/documents/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    documentId: docId,
+                    documentType: docType,
+                    sourceTable: sourceTable,
+                    action: action,
+                    adminId: adminUser?.id,
+                    adminEmail: adminUser?.email,
+                    userEmail: userInfo?.email
+                })
             });
 
-            toast.success(`${docType} approved`);
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || `Failed to ${action} document`);
+            }
+
+            toast.success(`${docType} ${action === 'approve' ? 'approved' : 'rejected'}`);
             fetchUserAndDocuments();
-        } catch (error) {
-            console.error('Error approving document:', error);
-            toast.error('Failed to approve document');
-        }
-    };
-
-    const handleReject = async (docId: string, docType: string, sourceTable: string) => {
-        if (!rejectionNotes.trim()) {
-            toast.error('Please provide a reason for rejection');
-            return;
-        }
-
-        try {
-            const adminClient = createAdminServiceClient();
-
-            await adminClient.from('document_verifications').upsert({
-                user_id: userId,
-                document_id: docId,
-                document_type: docType,
-                document_table: sourceTable,
-                status: 'rejected',
-                rejection_reason: rejectionNotes,
-                verified_by: adminUser?.id,
-                verified_at: new Date().toISOString()
-            }, { onConflict: 'document_id' });
-
-            // Log the action
-            await adminClient.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'reject_document',
-                action_description: `Rejected ${docType} for user. Reason: ${rejectionNotes}`,
-                target_user_id: userId,
-                target_user_email: userInfo?.email
-            });
-
-            toast.success(`${docType} rejected`);
-            setRejectionNotes('');
-            fetchUserAndDocuments();
-        } catch (error) {
-            console.error('Error rejecting document:', error);
-            toast.error('Failed to reject document');
+        } catch (error: any) {
+            console.error(`Error ${action}ing document:`, error);
+            toast.error(error.message || `Failed to ${action} document`);
+        } finally {
+            setProcessingDoc(null);
         }
     };
 
@@ -161,31 +120,6 @@ export default function UserDocumentsPage() {
             default:
                 return <Badge variant="warning">Pending</Badge>;
         }
-    };
-
-    const handleBulkAction = async (action: 'approve' | 'reject') => {
-        if (selectedDocs.length === 0) {
-            toast.error('Please select documents first');
-            return;
-        }
-
-        if (action === 'reject' && !rejectionNotes.trim()) {
-            toast.error('Please provide a reason for rejection');
-            return;
-        }
-
-        for (const docId of selectedDocs) {
-            const doc = documents.find(d => d.id === docId);
-            if (doc) {
-                if (action === 'approve') {
-                    await handleApprove(doc.id, doc.document_type, doc.source_table);
-                } else {
-                    await handleReject(doc.id, doc.document_type, doc.source_table);
-                }
-            }
-        }
-
-        setSelectedDocs([]);
     };
 
     return (
@@ -207,14 +141,13 @@ export default function UserDocumentsPage() {
                 </div>
 
                 {/* Documents Table */}
-                <Card className="mb-6">
+                <Card>
                     <div className="table-container">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Document Type</th>
                                     <th>Upload Date</th>
-                                    <th>OCR Extract</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -226,13 +159,12 @@ export default function UserDocumentsPage() {
                                             <td><div className="w-24 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-24 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-16 h-4 skeleton rounded"></div></td>
-                                            <td><div className="w-16 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-32 h-4 skeleton rounded"></div></td>
                                         </tr>
                                     ))
                                 ) : documents.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="text-center py-8 text-gray-500">
+                                        <td colSpan={4} className="text-center py-8 text-gray-500">
                                             No documents found for this user
                                         </td>
                                     </tr>
@@ -241,30 +173,23 @@ export default function UserDocumentsPage() {
                                         <tr key={doc.id}>
                                             <td className="font-medium text-gray-900">{doc.document_type}</td>
                                             <td className="text-gray-600">{formatDate(doc.upload_date)}</td>
-                                            <td>
-                                                <span className="text-gray-500">
-                                                    {doc.ocr_extracted ? 'Extracted' : 'Extracted'}
-                                                </span>
-                                            </td>
                                             <td>{getStatusBadge(doc.status)}</td>
                                             <td>
                                                 <div className="flex items-center gap-3">
                                                     <button
-                                                        onClick={() => handleApprove(doc.id, doc.document_type, doc.source_table)}
-                                                        className="text-green-600 hover:text-green-700 font-medium text-sm"
+                                                        onClick={() => handleAction(doc.id, doc.document_type, doc.source_table, 'approve')}
+                                                        disabled={processingDoc === doc.id || doc.status === 'approved'}
+                                                        className="text-green-600 hover:text-green-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                                                     >
+                                                        {processingDoc === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                                                         Approve
                                                     </button>
                                                     <button
-                                                        onClick={() => {
-                                                            if (!rejectionNotes.trim()) {
-                                                                toast.error('Please provide rejection notes below first');
-                                                                return;
-                                                            }
-                                                            handleReject(doc.id, doc.document_type, doc.source_table);
-                                                        }}
-                                                        className="text-red-600 hover:text-red-700 font-medium text-sm"
+                                                        onClick={() => handleAction(doc.id, doc.document_type, doc.source_table, 'reject')}
+                                                        disabled={processingDoc === doc.id || doc.status === 'rejected'}
+                                                        className="text-red-600 hover:text-red-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                                                     >
+                                                        {processingDoc === doc.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                                                         Reject
                                                     </button>
                                                     {doc.file_url && (
@@ -286,34 +211,6 @@ export default function UserDocumentsPage() {
                             </tbody>
                         </table>
                     </div>
-                </Card>
-
-                {/* Rejection Notes */}
-                <Card>
-                    <CardContent className="p-6">
-                        <h3 className="font-semibold text-gray-900 mb-3">Rejection Notes</h3>
-                        <textarea
-                            value={rejectionNotes}
-                            onChange={(e) => setRejectionNotes(e.target.value)}
-                            placeholder="Provide a reason for rejection..."
-                            className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                        />
-                        <div className="flex justify-end gap-3 mt-4">
-                            <Button
-                                variant="danger"
-                                onClick={() => handleBulkAction('reject')}
-                                disabled={selectedDocs.length === 0 && documents.filter(d => d.status === 'pending').length === 0}
-                            >
-                                Reject
-                            </Button>
-                            <Button
-                                onClick={() => handleBulkAction('approve')}
-                                disabled={selectedDocs.length === 0 && documents.filter(d => d.status === 'pending').length === 0}
-                            >
-                                Approve
-                            </Button>
-                        </div>
-                    </CardContent>
                 </Card>
             </div>
         </AdminLayout>

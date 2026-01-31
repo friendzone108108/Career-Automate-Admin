@@ -98,23 +98,13 @@ export async function GET(request: NextRequest) {
             console.error('Error fetching job status:', jobError);
         }
 
-        // Fetch blocked users from admin DB
-        const { data: blockedUsers, error: blockedError } = await adminClient
-            .from('blocked_users')
-            .select('user_id, is_blocked')
-            .in('user_id', userIds)
-            .eq('is_blocked', true);
-
-        if (blockedError) {
-            console.error('Error fetching blocked users:', blockedError);
-        }
-
-        const blockedUserIds = new Set(blockedUsers?.map(b => b.user_id) || []);
+        // Get blocked user IDs from profiles (is_blocked field)
+        const blockedUserIds = new Set(profiles.filter(p => p.is_blocked === true).map(p => p.id));
 
         // Filter by user type if specified
         let filteredProfiles = profiles;
         if (userType === 'blocked') {
-            filteredProfiles = profiles.filter(p => blockedUserIds.has(p.id));
+            filteredProfiles = profiles.filter(p => p.is_blocked === true);
         } else if (userType === 'active') {
             const activeJobUserIds = new Set(jobStatus?.filter(j => j.is_active).map(j => j.user_id) || []);
             filteredProfiles = profiles.filter(p => activeJobUserIds.has(p.id) && !blockedUserIds.has(p.id));
@@ -127,12 +117,13 @@ export async function GET(request: NextRequest) {
         const usersWithDetails = filteredProfiles.map(profile => {
             const userInfo = userEmailMap.get(profile.id);
             const jobInfo = jobStatus?.find(j => j.user_id === profile.id);
-            const isBlocked = blockedUserIds.has(profile.id);
+            const isBlocked = profile.is_blocked === true;
 
             return {
                 id: profile.id,
                 full_name: profile.full_name || 'Unnamed User',
                 email: userInfo?.email || 'Unknown',
+                primary_email: profile.primary_email,
                 is_verified: userInfo?.is_verified || false,
                 address: profile.address,
                 github_username: profile.github_username,

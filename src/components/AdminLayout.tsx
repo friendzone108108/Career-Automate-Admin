@@ -14,9 +14,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!loading && !user && pathname !== '/login') {
-            router.push('/login');
+            // Use hard navigation to ensure complete state reset
+            window.location.href = '/login';
         }
-    }, [user, loading, router, pathname]);
+    }, [user, loading, pathname]);
 
     // Show slow loading message after 2 seconds
     useEffect(() => {

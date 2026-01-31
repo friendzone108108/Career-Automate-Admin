@@ -316,6 +316,7 @@ export default function UsersPage() {
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Target Roles</th>
+                                    <th>Status</th>
                                     <th>GitHub</th>
                                     <th>Actions</th>
                                 </tr>
@@ -327,13 +328,14 @@ export default function UsersPage() {
                                             <td><div className="w-32 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-48 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-32 h-4 skeleton rounded"></div></td>
+                                            <td><div className="w-16 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-12 h-4 skeleton rounded"></div></td>
                                             <td><div className="w-24 h-4 skeleton rounded"></div></td>
                                         </tr>
                                     ))
                                 ) : users.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="text-center py-8 text-gray-500">
+                                        <td colSpan={6} className="text-center py-8 text-gray-500">
                                             No users found
                                         </td>
                                     </tr>
@@ -347,6 +349,13 @@ export default function UsersPage() {
                                             </td>
                                             <td className="text-gray-600">{getUserEmail(user)}</td>
                                             <td>{getTargetRoles(user)}</td>
+                                            <td>
+                                                {user.is_blocked ? (
+                                                    <Badge variant="danger">Blocked</Badge>
+                                                ) : (
+                                                    <Badge variant="success">Active</Badge>
+                                                )}
+                                            </td>
                                             <td>
                                                 {user.github_username ? (
                                                     <span className="text-green-600 font-medium">Yes</span>
@@ -373,8 +382,8 @@ export default function UsersPage() {
                                                     <button
                                                         onClick={() => handleBlockUser(user.id, getUserEmail(user), user.is_blocked)}
                                                         className={`p-2 rounded-lg transition-colors ${user.is_blocked
-                                                                ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                                                                : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
+                                                            ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                                                            : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
                                                             }`}
                                                         title={user.is_blocked ? 'Unblock User' : 'Block User'}
                                                     >
