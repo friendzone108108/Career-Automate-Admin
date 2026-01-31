@@ -13,12 +13,15 @@ import {
     Loader2,
     CheckCircle2,
     MapPin,
-    Building2,
     Hash,
-    Calendar
+    Calendar,
+    Globe
 } from 'lucide-react';
 
 const JOB_FETCHER_API_URL = process.env.NEXT_PUBLIC_JOB_FETCHER_API_URL || 'https://us91gapn47.execute-api.ap-south-1.amazonaws.com/Prod/v1';
+
+// Cutoff date - only show runs started after this date
+const RUNS_CUTOFF_DATE = new Date('2026-01-26T00:00:00Z');
 
 // Published At options for time filter
 const PUBLISHED_AT_OPTIONS = [
@@ -28,6 +31,17 @@ const PUBLISHED_AT_OPTIONS = [
     { value: 'r2592000', label: 'Past Month' },
 ];
 
+// Country options for Indeed
+const COUNTRY_OPTIONS = [
+    { value: 'IN', label: 'India' },
+    { value: 'US', label: 'United States' },
+    { value: 'GB', label: 'United Kingdom' },
+    { value: 'DE', label: 'Germany' },
+    { value: 'CA', label: 'Canada' },
+    { value: 'SG', label: 'Singapore' },
+    { value: 'AU', label: 'Australia' },
+];
+
 // Common job titles
 const COMMON_JOB_TITLES = [
     'Software Engineer',
@@ -35,11 +49,6 @@ const COMMON_JOB_TITLES = [
     'Backend Developer',
     'Frontend Developer',
     'Data Scientist',
-    'Data Analyst',
-    'Product Manager',
-    'DevOps Engineer',
-    'Machine Learning Engineer',
-    'UI/UX Designer',
 ];
 
 // Common locations
@@ -71,7 +80,7 @@ export default function JobFetcherPage() {
     const [title, setTitle] = useState('Software Engineer');
     const [location, setLocation] = useState('India');
     const [rows, setRows] = useState(50);
-    const [companyNames, setCompanyNames] = useState('');
+    const [country, setCountry] = useState('IN');
     const [publishedAt, setPublishedAt] = useState('');
 
     // UI state
@@ -79,16 +88,32 @@ export default function JobFetcherPage() {
     const [fetchRuns, setFetchRuns] = useState<FetchRun[]>([]);
     const [lastRunResult, setLastRunResult] = useState<{ run_id: string; status: string; message: string } | null>(null);
 
-    // Check if any job is currently running
-    const isJobRunning = fetchRuns.some(run => run.status === 'started' || run.status === 'running');
+    // Filter runs to only show those started after Jan 26, 2026
+    const recentRuns = fetchRuns.filter(run => {
+        const runDate = new Date(run.started_at);
+        return runDate >= RUNS_CUTOFF_DATE;
+    });
+
+    // Check if any RECENT job is currently running
+    const isJobRunning = recentRuns.some(run => run.status === 'started' || run.status === 'running');
 
     useEffect(() => {
         checkRunningJobs();
     }, []);
 
+    // Poll for status updates when a job is running
+    useEffect(() => {
+        if (isJobRunning) {
+            const interval = setInterval(() => {
+                checkRunningJobs();
+            }, 5000); // Poll every 5 seconds
+            return () => clearInterval(interval);
+        }
+    }, [isJobRunning]);
+
     const checkRunningJobs = async () => {
         try {
-            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=5`, {
+            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=10`, {
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`
                 }
@@ -112,8 +137,8 @@ export default function JobFetcherPage() {
             toast.error('Please enter a location');
             return;
         }
-        if (rows < 1 || rows > 200) {
-            toast.error('Number of jobs must be between 1 and 200');
+        if (rows < 1 || rows > 100) {
+            toast.error('Number of jobs must be between 1 and 100');
             return;
         }
 
@@ -124,13 +149,11 @@ export default function JobFetcherPage() {
             const requestBody: any = {
                 title: title.trim(),
                 location: location.trim(),
-                rows: rows
+                rows: rows,
+                country: country
             };
 
             // Add optional fields
-            if (companyNames.trim()) {
-                requestBody.companyName = companyNames.split(',').map(c => c.trim()).filter(c => c);
-            }
             if (publishedAt) {
                 requestBody.publishedAt = publishedAt;
             }
@@ -178,7 +201,7 @@ export default function JobFetcherPage() {
                         <h1 className="text-2xl font-bold text-gray-900">Job Fetcher</h1>
                     </div>
                     <p className="text-gray-500">
-                        Fetch jobs from LinkedIn using the Apify scraper. Configure your search criteria and trigger job fetching.
+                        Fetch jobs from LinkedIn, Indeed & Naukri using Apify scrapers. Configure your search criteria and trigger job fetching.
                     </p>
                 </div>
 
@@ -205,12 +228,15 @@ export default function JobFetcherPage() {
                                         placeholder="e.g., Software Engineer"
                                     />
                                     <div className="flex flex-wrap gap-2 mt-2">
-                                        {COMMON_JOB_TITLES.slice(0, 5).map((t) => (
+                                        {COMMON_JOB_TITLES.map((t) => (
                                             <button
                                                 key={t}
                                                 type="button"
                                                 onClick={() => setTitle(t)}
-                                                className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600"
+                                                className={`text-xs px-2 py-1 rounded transition-colors ${title === t
+                                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                                                    }`}
                                             >
                                                 {t}
                                             </button>
@@ -235,12 +261,34 @@ export default function JobFetcherPage() {
                                                 key={loc}
                                                 type="button"
                                                 onClick={() => setLocation(loc)}
-                                                className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600"
+                                                className={`text-xs px-2 py-1 rounded transition-colors ${location === loc
+                                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                                                    }`}
                                             >
                                                 {loc}
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+
+                                {/* Country (for Indeed) */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <Globe className="w-4 h-4 inline mr-1" />
+                                        Country <span className="text-gray-400">(for Indeed portal)</span>
+                                    </label>
+                                    <select
+                                        value={country}
+                                        onChange={(e) => setCountry(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {COUNTRY_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {/* Number of Jobs */}
@@ -254,27 +302,11 @@ export default function JobFetcherPage() {
                                         value={rows}
                                         onChange={(e) => setRows(parseInt(e.target.value) || 50)}
                                         min={1}
-                                        max={200}
+                                        max={100}
                                         placeholder="50"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Min: 1, Max: 200. More jobs = more Apify credits consumed.
-                                    </p>
-                                </div>
-
-                                {/* Company Names (Optional) */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        <Building2 className="w-4 h-4 inline mr-1" />
-                                        Company Names <span className="text-gray-400">(Optional)</span>
-                                    </label>
-                                    <Input
-                                        value={companyNames}
-                                        onChange={(e) => setCompanyNames(e.target.value)}
-                                        placeholder="Google, Microsoft, Amazon (comma separated)"
-                                    />
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Leave empty to search all companies. Separate multiple names with commas.
+                                        Min: 1, Max: 100 per portal. More jobs = more Apify credits consumed.
                                     </p>
                                 </div>
 
@@ -301,13 +333,18 @@ export default function JobFetcherPage() {
                                 <div className="pt-4 border-t">
                                     <Button
                                         onClick={handleStartFetch}
-                                        disabled={fetching || !title.trim() || !location.trim()}
+                                        disabled={fetching || !title.trim() || !location.trim() || isJobRunning}
                                         className="w-full h-12 text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                                     >
                                         {fetching ? (
                                             <>
                                                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                                                 Starting Job Fetch...
+                                            </>
+                                        ) : isJobRunning ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                                Job Fetch in Progress...
                                             </>
                                         ) : (
                                             <>
@@ -317,7 +354,7 @@ export default function JobFetcherPage() {
                                         )}
                                     </Button>
                                     <p className="text-xs text-center text-gray-500 mt-2">
-                                        ⚠️ This will consume Apify credits. Use responsibly.
+                                        ⚠️ This will consume Apify credits. Jobs are fetched from LinkedIn, Indeed & Naukri in parallel.
                                     </p>
                                 </div>
 
@@ -336,9 +373,8 @@ export default function JobFetcherPage() {
                         </Card>
                     </div>
 
-                    {/* Right Column - Running Indicator */}
+                    {/* Right Column - Running Indicator (Only show when actually running) */}
                     <div>
-                        {/* Only show if a job is currently running */}
                         {isJobRunning && (
                             <Card className="border-orange-200 bg-orange-50">
                                 <CardContent className="p-6">
@@ -353,6 +389,55 @@ export default function JobFetcherPage() {
                                             </p>
                                         </div>
                                     </div>
+                                    {/* Show recent running run details */}
+                                    {recentRuns.filter(r => r.status === 'started' || r.status === 'running').map(run => (
+                                        <div key={run.id} className="mt-4 p-3 bg-white rounded-lg border border-orange-200">
+                                            <p className="text-xs text-gray-500">Run ID: {run.id.slice(0, 8)}...</p>
+                                            <p className="text-xs text-gray-500">Portal: {run.portal}</p>
+                                            <p className="text-xs text-gray-500">
+                                                Started: {new Date(run.started_at).toLocaleTimeString()}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Show recently completed runs */}
+                        {!isJobRunning && recentRuns.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-sm text-gray-600">Recent Runs</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {recentRuns.slice(0, 3).map(run => (
+                                        <div key={run.id} className={`p-3 rounded-lg border ${run.status === 'completed'
+                                                ? 'bg-green-50 border-green-200'
+                                                : run.status === 'failed'
+                                                    ? 'bg-red-50 border-red-200'
+                                                    : 'bg-gray-50 border-gray-200'
+                                            }`}>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-medium text-gray-700">{run.portal}</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${run.status === 'completed'
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : run.status === 'failed'
+                                                            ? 'bg-red-100 text-red-700'
+                                                            : 'bg-yellow-100 text-yellow-700'
+                                                    }`}>
+                                                    {run.status}
+                                                </span>
+                                            </div>
+                                            {run.status === 'completed' && (
+                                                <p className="text-xs text-gray-600">
+                                                    {run.jobs_found} found, {run.new_jobs_added} new
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-400">
+                                                {new Date(run.started_at).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    ))}
                                 </CardContent>
                             </Card>
                         )}
