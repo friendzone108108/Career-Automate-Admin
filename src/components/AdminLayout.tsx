@@ -1,23 +1,50 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { isSessionExpired, clearSessionData } from '@/lib/supabase';
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
-    const { user, loading } = useAuth();
-    const router = useRouter();
+    const { user, loading, signOut } = useAuth();
     const pathname = usePathname();
     const [showSlowLoadingMessage, setShowSlowLoadingMessage] = useState(false);
+    const [isValidSession, setIsValidSession] = useState(true);
 
+    // Force redirect to login
+    const forceRedirectToLogin = useCallback(() => {
+        clearSessionData();
+        window.location.href = '/login';
+    }, []);
+
+    // Check session validity on mount and periodically
+    useEffect(() => {
+        // Initial check
+        if (isSessionExpired()) {
+            setIsValidSession(false);
+            forceRedirectToLogin();
+            return;
+        }
+
+        // Periodic check every 10 seconds
+        const intervalId = setInterval(() => {
+            if (isSessionExpired()) {
+                setIsValidSession(false);
+                forceRedirectToLogin();
+            }
+        }, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [forceRedirectToLogin]);
+
+    // Redirect if no user
     useEffect(() => {
         if (!loading && !user && pathname !== '/login') {
-            // Use hard navigation to ensure complete state reset
-            window.location.href = '/login';
+            forceRedirectToLogin();
         }
-    }, [user, loading, pathname]);
+    }, [user, loading, pathname, forceRedirectToLogin]);
 
     // Show slow loading message after 2 seconds
     useEffect(() => {
@@ -30,6 +57,18 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             setShowSlowLoadingMessage(false);
         }
     }, [loading]);
+
+    // If session is invalid, show nothing (redirect in progress)
+    if (!isValidSession) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-gray-600">Session expired. Redirecting to login...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (loading) {
         return (
@@ -48,6 +87,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
 
     if (!user) {
+        // Return null while redirect happens
         return null;
     }
 

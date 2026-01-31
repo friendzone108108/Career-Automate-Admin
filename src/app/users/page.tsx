@@ -11,12 +11,15 @@ import {
     FileText,
     Mail,
     UserX,
+    UserCheck,
     ChevronLeft,
     ChevronRight,
     Plus,
     X,
     Send,
-    Loader2
+    Loader2,
+    Users,
+    ShieldX
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { adminSupabase } from '@/lib/supabase';
@@ -51,6 +54,7 @@ export default function UsersPage() {
     const [userTypeFilter, setUserTypeFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalUsers, setTotalUsers] = useState(0);
+    const [activeTab, setActiveTab] = useState<'all' | 'blocked'>('all');
     const pageSize = 10;
 
     // Email modal state
@@ -62,7 +66,7 @@ export default function UsersPage() {
 
     useEffect(() => {
         fetchUsers();
-    }, [currentPage, locationFilter, signupFilter, userTypeFilter]);
+    }, [currentPage, locationFilter, signupFilter, userTypeFilter, activeTab]);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -73,7 +77,9 @@ export default function UsersPage() {
             if (searchQuery) params.set('search', searchQuery);
             if (locationFilter) params.set('location', locationFilter);
             if (signupFilter) params.set('signup', signupFilter);
-            if (userTypeFilter) params.set('userType', userTypeFilter);
+            // Use activeTab to filter - if on blocked tab, show only blocked users
+            const effectiveUserType = activeTab === 'blocked' ? 'blocked' : userTypeFilter;
+            if (effectiveUserType) params.set('userType', effectiveUserType);
 
             const response = await fetch(`/api/users?${params.toString()}`);
             const data = await response.json();
@@ -228,6 +234,36 @@ export default function UsersPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+                    <button
+                        onClick={() => {
+                            setActiveTab('all');
+                            setCurrentPage(1);
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'all'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                    >
+                        <Users className="w-4 h-4" />
+                        All Users
+                    </button>
+                    <button
+                        onClick={() => {
+                            setActiveTab('blocked');
+                            setCurrentPage(1);
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'blocked'
+                            ? 'bg-white text-red-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                            }`}
+                    >
+                        <ShieldX className="w-4 h-4" />
+                        Blocked Users
+                    </button>
                 </div>
 
                 {/* Filters */}
@@ -387,7 +423,11 @@ export default function UsersPage() {
                                                             }`}
                                                         title={user.is_blocked ? 'Unblock User' : 'Block User'}
                                                     >
-                                                        <UserX className="w-4 h-4" />
+                                                        {user.is_blocked ? (
+                                                            <UserCheck className="w-4 h-4" />
+                                                        ) : (
+                                                            <UserX className="w-4 h-4" />
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>
