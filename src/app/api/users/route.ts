@@ -116,8 +116,8 @@ export async function GET(request: NextRequest) {
         if (userType === 'blocked') {
             filteredProfiles = profiles.filter(p => p.is_blocked === true);
         } else if (userType === 'active') {
-            const activeJobUserIds = new Set(jobStatus?.filter(j => j.is_active).map(j => j.user_id) || []);
-            filteredProfiles = profiles.filter(p => activeJobUserIds.has(p.id) && !blockedUserIds.has(p.id));
+            // Active means not blocked (matching UI badge logic)
+            filteredProfiles = profiles.filter(p => p.is_blocked !== true);
         } else if (userType === 'inactive') {
             const activeJobUserIds = new Set(jobStatus?.filter(j => j.is_active).map(j => j.user_id) || []);
             filteredProfiles = profiles.filter(p => !activeJobUserIds.has(p.id) && !blockedUserIds.has(p.id));
