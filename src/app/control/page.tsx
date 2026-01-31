@@ -10,7 +10,7 @@ import {
     AlertOctagon
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { createAdminServiceClient } from '@/lib/supabase';
+import { createAdminServiceClient, createFrontendServiceClient } from '@/lib/supabase';
 import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -86,15 +86,16 @@ export default function ControlPage() {
     const handleEmergencyStop = async () => {
         const newStatus = !emergencyStopActive;
 
-        if (newStatus && !confirm('⚠️ EMERGENCY STOP\n\nThis will immediately halt ALL automation processes for ALL users.\n\nAre you sure you want to proceed?')) {
+        if (newStatus && !confirm('⚠️ EMERGENCY STOP\n\nThis will immediately block user access to the platform.\nUsers will not be able to login.\n\nAre you sure you want to proceed?')) {
             return;
         }
 
         setActivatingEmergencyStop(true);
         try {
             const adminClient = createAdminServiceClient();
+            const frontendClient = createFrontendServiceClient();
 
-            // Upsert the setting
+            // Update admin DB
             await adminClient
                 .from('system_settings')
                 .upsert({
@@ -104,16 +105,26 @@ export default function ControlPage() {
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'setting_key' });
 
+            // Update frontend DB (for frontend app to check)
+            await frontendClient
+                .from('system_controls')
+                .update({
+                    control_value: newStatus,
+                    updated_at: new Date().toISOString(),
+                    updated_by: adminUser?.email
+                })
+                .eq('control_key', 'emergency_stop');
+
             // Log the action
             await adminClient.from('activity_logs').insert({
                 admin_id: adminUser?.id,
                 admin_email: adminUser?.email,
                 action_type: 'emergency_stop',
-                action_description: newStatus ? '🚨 Emergency stop ACTIVATED - All automations halted' : '✅ Emergency stop DEACTIVATED - Automations can resume'
+                action_description: newStatus ? '🚨 Emergency stop ACTIVATED - Users cannot login' : '✅ Emergency stop DEACTIVATED - Users can login again'
             });
 
             setEmergencyStopActive(newStatus);
-            toast.success(newStatus ? 'Emergency stop activated!' : 'Emergency stop deactivated');
+            toast.success(newStatus ? 'Emergency stop activated! Users cannot login.' : 'Emergency stop deactivated. Users can login now.');
             fetchActivityLogs();
         } catch (error) {
             console.error('Error toggling emergency stop:', error);
@@ -126,15 +137,16 @@ export default function ControlPage() {
     const handleStopAllAutomations = async () => {
         const newStatus = !allAutomationsStopped;
 
-        if (newStatus && !confirm('⛔ STOP ALL AUTOMATIONS\n\nThis will permanently stop all automation processes.\nUsers will see a "Service Unavailable" message.\n\nAre you sure you want to proceed?')) {
+        if (newStatus && !confirm('⛔ STOP ALL AUTOMATIONS\n\nThis will disable all automation buttons for users.\nUsers can still login and view their data, but cannot perform automations.\n\nAre you sure you want to proceed?')) {
             return;
         }
 
         setStoppingAllAutomations(true);
         try {
             const adminClient = createAdminServiceClient();
+            const frontendClient = createFrontendServiceClient();
 
-            // Upsert the setting
+            // Update admin DB
             await adminClient
                 .from('system_settings')
                 .upsert({
@@ -144,16 +156,26 @@ export default function ControlPage() {
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'setting_key' });
 
+            // Update frontend DB (for frontend app to check)
+            await frontendClient
+                .from('system_controls')
+                .update({
+                    control_value: newStatus,
+                    updated_at: new Date().toISOString(),
+                    updated_by: adminUser?.email
+                })
+                .eq('control_key', 'automations_stopped');
+
             // Log the action
             await adminClient.from('activity_logs').insert({
                 admin_id: adminUser?.id,
                 admin_email: adminUser?.email,
                 action_type: 'stop_all_automations',
-                action_description: newStatus ? '⛔ All automations STOPPED - Users cannot access automation features' : '✅ All automations RESUMED - Users can access automation features'
+                action_description: newStatus ? '⛔ All automations STOPPED - Automation buttons disabled' : '✅ All automations RESUMED - Automation buttons enabled'
             });
 
             setAllAutomationsStopped(newStatus);
-            toast.success(newStatus ? 'All automations stopped!' : 'All automations resumed');
+            toast.success(newStatus ? 'All automations stopped! Buttons are now disabled for users.' : 'All automations resumed! Buttons are now enabled.');
             fetchActivityLogs();
         } catch (error) {
             console.error('Error stopping all automations:', error);
