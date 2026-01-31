@@ -8,6 +8,7 @@ import {
     MoreVertical,
     X
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState, useCallback } from 'react';
 
 interface DashboardStats {
@@ -23,6 +24,7 @@ interface FilterState {
 }
 
 export default function DashboardPage() {
+    const { session } = useAuth();
     const [stats, setStats] = useState<DashboardStats>({
         totalUsers: 0,
         newSignups: 0,
@@ -49,21 +51,29 @@ export default function DashboardPage() {
     ];
 
     useEffect(() => {
-        fetchDashboardStats();
-    }, []);
+        if (session) {
+            fetchDashboardStats();
+        }
+    }, [session]);
 
     // Fetch filtered stats when filters change
     useEffect(() => {
-        if (totalUsersFilter.location || totalUsersFilter.newUsers || totalUsersFilter.oldUsers) {
-            fetchFilteredStats('totalUsers', totalUsersFilter);
-        } else {
-            setFilteredTotalUsers(null);
+        if (session) {
+            if (totalUsersFilter.location || totalUsersFilter.newUsers || totalUsersFilter.oldUsers) {
+                fetchFilteredStats('totalUsers', totalUsersFilter);
+            } else {
+                setFilteredTotalUsers(null);
+            }
         }
-    }, [totalUsersFilter]);
+    }, [totalUsersFilter, session]);
 
     const fetchDashboardStats = async () => {
         try {
-            const response = await fetch('/api/dashboard/stats');
+            const response = await fetch('/api/dashboard/stats', {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (response.ok) {
@@ -90,7 +100,11 @@ export default function DashboardPage() {
             if (filters.newUsers) params.set('newUsers', 'true');
             if (filters.oldUsers) params.set('oldUsers', 'true');
 
-            const response = await fetch(`/api/dashboard/filtered-stats?${params.toString()}`);
+            const response = await fetch(`/api/dashboard/filtered-stats?${params.toString()}`, {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (response.ok) {

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
 // Use environment variables
 const FRONTEND_SUPABASE_URL = process.env.FRONTEND_SUPABASE_URL;
 const FRONTEND_SUPABASE_SERVICE_ROLE_KEY = process.env.FRONTEND_SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const query = searchParams.get('q') || '';

@@ -26,7 +26,7 @@ interface ApiKey {
 }
 
 export default function ApiKeysPage() {
-    const { adminUser } = useAuth();
+    const { adminUser, session } = useAuth();
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -42,13 +42,19 @@ export default function ApiKeysPage() {
     });
 
     useEffect(() => {
-        fetchApiKeys();
-    }, []);
+        if (session) {
+            fetchApiKeys();
+        }
+    }, [session]);
 
     const fetchApiKeys = async () => {
         setLoading(true);
         try {
-            const response = await fetch('/api/api-keys');
+            const response = await fetch('/api/api-keys', {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (response.ok) {
@@ -83,7 +89,10 @@ export default function ApiKeysPage() {
 
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
                 body: JSON.stringify(body)
             });
 
@@ -124,7 +133,10 @@ export default function ApiKeysPage() {
         try {
             const response = await fetch('/api/api-keys', {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
                 body: JSON.stringify({
                     id: keyId,
                     api_key_value: newKeyValue,
@@ -150,7 +162,10 @@ export default function ApiKeysPage() {
 
         try {
             const response = await fetch(`/api/api-keys?id=${keyId}&admin_id=${adminUser?.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
             });
 
             if (response.ok) {

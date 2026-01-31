@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminServiceClient } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
 // GET - Fetch all API keys
-export async function GET() {
+export async function GET(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const adminClient = getAdminServiceClient();
 
@@ -25,6 +35,15 @@ export async function GET() {
 
 // POST - Create new API key
 export async function POST(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const adminClient = getAdminServiceClient();
         const body = await request.json();
@@ -72,6 +91,15 @@ export async function POST(request: NextRequest) {
 
 // PUT - Update API key
 export async function PUT(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const adminClient = getAdminServiceClient();
         const body = await request.json();
@@ -119,6 +147,15 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Delete API key
 export async function DELETE(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const adminClient = getAdminServiceClient();
         const { searchParams } = new URL(request.url);

@@ -23,7 +23,7 @@ interface BroadcastNotification {
 }
 
 export default function NotificationsPage() {
-    const { adminUser } = useAuth();
+    const { adminUser, session } = useAuth();
     const [notifications, setNotifications] = useState<BroadcastNotification[]>([]);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
@@ -70,7 +70,11 @@ export default function NotificationsPage() {
         setSearchLoading(true);
         try {
             // Use the API endpoint to search users (it has access to auth.users)
-            const response = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
+            const response = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (!response.ok) {
@@ -120,7 +124,10 @@ export default function NotificationsPage() {
             // Call the email sending API
             const response = await fetch('/api/notifications/send-email', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
                 body: JSON.stringify(emailPayload)
             });
 

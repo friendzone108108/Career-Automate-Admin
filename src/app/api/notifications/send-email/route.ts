@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { createFrontendServiceClient } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
 // SMTP Configuration from environment variables
 const SMTP_EMAIL = process.env.SMTP_EMAIL;
@@ -15,6 +16,15 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function POST(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const body = await request.json();
         const { subject, message, notificationType, targetAudience, recipientEmail, recipientId } = body;
