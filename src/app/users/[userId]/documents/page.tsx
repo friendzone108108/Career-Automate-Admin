@@ -66,10 +66,10 @@ export default function UserDocumentsPage() {
             const frontendClient = createFrontendServiceClient();
             const adminClient = createAdminServiceClient();
 
-            // Fetch user info
+            // Fetch user info including profile_photo_url and govt_id_url
             const { data: profile } = await frontendClient
                 .from('profiles')
-                .select('full_name')
+                .select('full_name, profile_photo_url, govt_id_url')
                 .eq('id', userId)
                 .single();
 
@@ -83,7 +83,7 @@ export default function UserDocumentsPage() {
                 });
             }
 
-            // Fetch only resumes/documents from documents table
+            // Fetch resumes/documents from documents table
             const { data: docs } = await frontendClient
                 .from('documents')
                 .select('id, title, document_type, file_url, created_at, role')
@@ -100,7 +100,7 @@ export default function UserDocumentsPage() {
                 verifications?.map(v => [v.document_id, { status: v.status, ocr: v.ocr_extracted }]) || []
             );
 
-            // Map resumes to display format
+            // Build documents list: Resumes + Profile Photo + Govt ID
             const allDocs: DocumentItem[] = [];
 
             // Add resumes/documents
@@ -116,6 +116,32 @@ export default function UserDocumentsPage() {
                     ocr_extracted: verification?.ocr || false
                 });
             });
+
+            // Add profile photo if exists
+            if (profile?.profile_photo_url) {
+                allDocs.push({
+                    id: `${userId}_profile_photo`,
+                    document_type: 'Profile Photo',
+                    upload_date: new Date().toISOString(),
+                    file_url: profile.profile_photo_url,
+                    source_table: 'profiles',
+                    status: verificationMap.get(`${userId}_profile_photo`)?.status || 'pending',
+                    ocr_extracted: false
+                });
+            }
+
+            // Add govt ID if exists
+            if (profile?.govt_id_url) {
+                allDocs.push({
+                    id: `${userId}_govt_id`,
+                    document_type: 'Government ID',
+                    upload_date: new Date().toISOString(),
+                    file_url: profile.govt_id_url,
+                    source_table: 'profiles',
+                    status: verificationMap.get(`${userId}_govt_id`)?.status || 'pending',
+                    ocr_extracted: false
+                });
+            }
 
             setDocuments(allDocs);
         } catch (error) {
@@ -240,14 +266,14 @@ export default function UserDocumentsPage() {
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
                     <Link href="/users" className="hover:text-blue-600">User Management</Link>
                     <ChevronRight className="w-4 h-4" />
-                    <span className="text-gray-900">View Resumes</span>
+                    <span className="text-gray-900">User Documents</span>
                 </div>
 
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">Generated Resumes</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">User Documents</h1>
                     <p className="text-gray-500 mt-1">
-                        View AI-generated resumes{userInfo ? ` for ${userInfo.full_name}` : ''}.
+                        Resumes, Profile Photo & Government ID{userInfo ? ` for ${userInfo.full_name}` : ''}.
                     </p>
                 </div>
 
@@ -257,7 +283,7 @@ export default function UserDocumentsPage() {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Resume Title</th>
+                                    <th>Document Type</th>
                                     <th>Upload Date</th>
                                     <th>OCR Extract</th>
                                     <th>Status</th>
@@ -278,7 +304,7 @@ export default function UserDocumentsPage() {
                                 ) : documents.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="text-center py-8 text-gray-500">
-                                            No resumes found for this user
+                                            No documents found for this user
                                         </td>
                                     </tr>
                                 ) : (
