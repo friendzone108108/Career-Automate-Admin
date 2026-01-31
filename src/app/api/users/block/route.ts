@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFrontendServiceClient, getAdminServiceClient } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
+    // Validate admin session
+    const { user: adminUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !adminUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const body = await request.json();
         const { userId, userEmail, action, blockedBy, blockedReason } = body;

@@ -11,15 +11,13 @@ import {
     FileText,
     Mail,
     UserX,
-    UserCheck,
     ChevronLeft,
     ChevronRight,
     Plus,
     X,
     Send,
     Loader2,
-    Users,
-    ShieldX
+    UserCheck
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { adminSupabase } from '@/lib/supabase';
@@ -54,7 +52,6 @@ export default function UsersPage() {
     const [userTypeFilter, setUserTypeFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalUsers, setTotalUsers] = useState(0);
-    const [activeTab, setActiveTab] = useState<'all' | 'blocked'>('all');
     const pageSize = 10;
 
     // Email modal state
@@ -66,7 +63,7 @@ export default function UsersPage() {
 
     useEffect(() => {
         fetchUsers();
-    }, [currentPage, locationFilter, signupFilter, userTypeFilter, activeTab]);
+    }, [currentPage, locationFilter, signupFilter, userTypeFilter]);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -77,9 +74,7 @@ export default function UsersPage() {
             if (searchQuery) params.set('search', searchQuery);
             if (locationFilter) params.set('location', locationFilter);
             if (signupFilter) params.set('signup', signupFilter);
-            // Use activeTab to filter - if on blocked tab, show only blocked users
-            const effectiveUserType = activeTab === 'blocked' ? 'blocked' : userTypeFilter;
-            if (effectiveUserType) params.set('userType', effectiveUserType);
+            if (userTypeFilter) params.set('userType', userTypeFilter);
 
             const response = await fetch(`/api/users?${params.toString()}`);
             const data = await response.json();
@@ -237,32 +232,33 @@ export default function UsersPage() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+                <div className="flex items-center space-x-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
                     <button
-                        onClick={() => {
-                            setActiveTab('all');
-                            setCurrentPage(1);
-                        }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'all'
+                        onClick={() => { setUserTypeFilter(''); setCurrentPage(1); }}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${userTypeFilter === ''
                             ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
+                            : 'text-gray-500 hover:text-gray-900'
                             }`}
                     >
-                        <Users className="w-4 h-4" />
                         All Users
                     </button>
                     <button
-                        onClick={() => {
-                            setActiveTab('blocked');
-                            setCurrentPage(1);
-                        }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'blocked'
-                            ? 'bg-white text-red-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
+                        onClick={() => { setUserTypeFilter('active'); setCurrentPage(1); }}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${userTypeFilter === 'active'
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
                             }`}
                     >
-                        <ShieldX className="w-4 h-4" />
-                        Blocked Users
+                        Active
+                    </button>
+                    <button
+                        onClick={() => { setUserTypeFilter('blocked'); setCurrentPage(1); }}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${userTypeFilter === 'blocked'
+                            ? 'bg-white text-red-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
+                            }`}
+                    >
+                        Blocked
                     </button>
                 </div>
 
@@ -321,22 +317,6 @@ export default function UsersPage() {
                                     setCurrentPage(1);
                                 }}
                                 placeholder="Signup Date"
-                                className="w-40"
-                            />
-
-                            <Select
-                                options={[
-                                    { value: '', label: 'All Types' },
-                                    { value: 'active', label: 'Active' },
-                                    { value: 'inactive', label: 'Inactive' },
-                                    { value: 'blocked', label: 'Blocked' },
-                                ]}
-                                value={userTypeFilter}
-                                onChange={(val) => {
-                                    setUserTypeFilter(val);
-                                    setCurrentPage(1);
-                                }}
-                                placeholder="User Type"
                                 className="w-40"
                             />
                         </div>
@@ -423,11 +403,7 @@ export default function UsersPage() {
                                                             }`}
                                                         title={user.is_blocked ? 'Unblock User' : 'Block User'}
                                                     >
-                                                        {user.is_blocked ? (
-                                                            <UserCheck className="w-4 h-4" />
-                                                        ) : (
-                                                            <UserX className="w-4 h-4" />
-                                                        )}
+                                                        {user.is_blocked ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                                                     </button>
                                                 </div>
                                             </td>

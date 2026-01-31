@@ -1,10 +1,28 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminServiceClient, createFrontendServiceClient } from '@/lib/supabase';
+import { validateAdminRequest } from '@/lib/auth-utils';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    // Validate admin session
+    const { user: authedUser, error: authError } = await validateAdminRequest(request);
+    if (authError || !authedUser) {
+        return NextResponse.json(
+            { error: 'Unauthorized: ' + authError },
+            { status: 401 }
+        );
+    }
+
     try {
         const body = await request.json();
         const { controlKey, controlValue, adminEmail, adminId } = body;
+
+        // Verify that the ID in body matches the authenticated user (prevent spoofing)
+        if (adminId && adminId !== authedUser.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized: User ID mismatch' },
+                { status: 401 }
+            );
+        }
 
         if (!controlKey || controlValue === undefined) {
             return NextResponse.json(
