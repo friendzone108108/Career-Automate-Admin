@@ -25,7 +25,7 @@ interface ActivityLog {
 }
 
 export default function ControlPage() {
-    const { adminUser } = useAuth();
+    const { adminUser, session } = useAuth();
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [emergencyStopActive, setEmergencyStopActive] = useState(false);
     const [allAutomationsStopped, setAllAutomationsStopped] = useState(false);
@@ -96,6 +96,7 @@ export default function ControlPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
                 },
                 body: JSON.stringify({
                     controlKey: 'emergency_stop',
@@ -135,6 +136,7 @@ export default function ControlPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
                 },
                 body: JSON.stringify({
                     controlKey: 'all_automations_stopped',

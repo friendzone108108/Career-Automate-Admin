@@ -43,7 +43,7 @@ interface User {
 }
 
 export default function UsersPage() {
-    const { adminUser } = useAuth();
+    const { adminUser, session } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -62,8 +62,10 @@ export default function UsersPage() {
     const [sendingEmail, setSendingEmail] = useState(false);
 
     useEffect(() => {
-        fetchUsers();
-    }, [currentPage, locationFilter, signupFilter, userTypeFilter]);
+        if (session) {
+            fetchUsers();
+        }
+    }, [currentPage, locationFilter, signupFilter, userTypeFilter, session]);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -76,7 +78,11 @@ export default function UsersPage() {
             if (signupFilter) params.set('signup', signupFilter);
             if (userTypeFilter) params.set('userType', userTypeFilter);
 
-            const response = await fetch(`/api/users?${params.toString()}`);
+            const response = await fetch(`/api/users?${params.toString()}`, {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (response.ok) {
@@ -106,7 +112,10 @@ export default function UsersPage() {
         try {
             const response = await fetch('/api/users/block', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
                 body: JSON.stringify({
                     userId,
                     userEmail,

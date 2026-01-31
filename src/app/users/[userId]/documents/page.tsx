@@ -43,7 +43,7 @@ interface UserInfo {
 export default function UserDocumentsPage() {
     const params = useParams();
     const router = useRouter();
-    const { adminUser } = useAuth();
+    const { adminUser, session } = useAuth();
     const userId = params.userId as string;
 
     const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -52,16 +52,20 @@ export default function UserDocumentsPage() {
     const [processingDoc, setProcessingDoc] = useState<string | null>(null);
 
     useEffect(() => {
-        if (userId) {
+        if (userId && session) {
             fetchUserAndDocuments();
         }
-    }, [userId]);
+    }, [userId, session]);
 
     const fetchUserAndDocuments = async () => {
         setLoading(true);
         try {
             // Use API route instead of direct client calls (service client only works server-side)
-            const response = await fetch(`/api/users/${userId}/documents`);
+            const response = await fetch(`/api/users/${userId}/documents`, {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
             const data = await response.json();
 
             if (!response.ok) {
@@ -83,7 +87,10 @@ export default function UserDocumentsPage() {
         try {
             const response = await fetch(`/api/users/${userId}/documents/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
                 body: JSON.stringify({
                     documentId: docId,
                     documentType: docType,
