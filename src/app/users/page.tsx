@@ -98,35 +98,34 @@ export default function UsersPage() {
         fetchUsers();
     };
 
-    const handleBlockUser = async (userId: string, userEmail: string) => {
-        if (!confirm(`Are you sure you want to block user ${userEmail}?`)) return;
+    const handleBlockUser = async (userId: string, userEmail: string, isCurrentlyBlocked: boolean) => {
+        const action = isCurrentlyBlocked ? 'unblock' : 'block';
+        if (!confirm(`Are you sure you want to ${action} user ${userEmail}?`)) return;
 
         try {
-            const { error } = await adminSupabase.from('blocked_users').upsert({
-                user_id: userId,
-                user_email: userEmail,
-                blocked_by: adminUser?.id,
-                blocked_at: new Date().toISOString(),
-                is_blocked: true
+            const response = await fetch('/api/users/block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    userEmail,
+                    action,
+                    blockedBy: adminUser?.id,
+                    blockedReason: 'Blocked by admin'
+                })
             });
 
-            if (error) throw error;
+            const result = await response.json();
 
-            // Log the action
-            await adminSupabase.from('activity_logs').insert({
-                admin_id: adminUser?.id,
-                admin_email: adminUser?.email,
-                action_type: 'block_user',
-                action_description: `Blocked user: ${userEmail}`,
-                target_user_id: userId,
-                target_user_email: userEmail
-            });
+            if (!response.ok) {
+                throw new Error(result.error || `Failed to ${action} user`);
+            }
 
-            toast.success(`User ${userEmail} has been blocked`);
+            toast.success(`User ${userEmail} has been ${action}ed`);
             fetchUsers(); // Refresh the list
-        } catch (error) {
-            console.error('Error blocking user:', error);
-            toast.error('Failed to block user');
+        } catch (error: any) {
+            console.error(`Error ${action}ing user:`, error);
+            toast.error(error.message || `Failed to ${action} user`);
         }
     };
 
@@ -371,15 +370,16 @@ export default function UsersPage() {
                                                     >
                                                         <Mail className="w-4 h-4" />
                                                     </button>
-                                                    {!user.is_blocked && (
-                                                        <button
-                                                            onClick={() => handleBlockUser(user.id, getUserEmail(user))}
-                                                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            title="Block User"
-                                                        >
-                                                            <UserX className="w-4 h-4" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => handleBlockUser(user.id, getUserEmail(user), user.is_blocked)}
+                                                        className={`p-2 rounded-lg transition-colors ${user.is_blocked
+                                                                ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                                                                : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
+                                                            }`}
+                                                        title={user.is_blocked ? 'Unblock User' : 'Block User'}
+                                                    >
+                                                        <UserX className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>

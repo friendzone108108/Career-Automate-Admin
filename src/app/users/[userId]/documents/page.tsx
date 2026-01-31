@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { createFrontendServiceClient, createAdminServiceClient } from '@/lib/supabase';
+import { createAdminServiceClient } from '@/lib/supabase';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -63,87 +63,16 @@ export default function UserDocumentsPage() {
     const fetchUserAndDocuments = async () => {
         setLoading(true);
         try {
-            const frontendClient = createFrontendServiceClient();
-            const adminClient = createAdminServiceClient();
+            // Use API route instead of direct client calls (service client only works server-side)
+            const response = await fetch(`/api/users/${userId}/documents`);
+            const data = await response.json();
 
-            // Fetch user info including profile_photo_url and govt_id_url
-            const { data: profile } = await frontendClient
-                .from('profiles')
-                .select('full_name, profile_photo_url, govt_id_url')
-                .eq('id', userId)
-                .single();
-
-            // Fetch user email using Admin API
-            const { data: authUser, error: authError } = await frontendClient.auth.admin.getUserById(userId);
-
-            if (profile) {
-                setUserInfo({
-                    full_name: profile.full_name || 'Unknown User',
-                    email: authUser?.user?.email || 'Unknown'
-                });
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to fetch documents');
             }
 
-            // Fetch resumes/documents from documents table
-            const { data: docs } = await frontendClient
-                .from('documents')
-                .select('id, title, document_type, file_url, created_at, role')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
-
-            // Fetch existing verifications from admin DB
-            const { data: verifications } = await adminClient
-                .from('document_verifications')
-                .select('document_id, status, ocr_extracted')
-                .eq('user_id', userId);
-
-            const verificationMap = new Map(
-                verifications?.map(v => [v.document_id, { status: v.status, ocr: v.ocr_extracted }]) || []
-            );
-
-            // Build documents list: Resumes + Profile Photo + Govt ID
-            const allDocs: DocumentItem[] = [];
-
-            // Add resumes/documents
-            docs?.forEach(doc => {
-                const verification = verificationMap.get(doc.id);
-                allDocs.push({
-                    id: doc.id,
-                    document_type: doc.role ? `Resume - ${doc.role}` : (doc.title || 'Resume'),
-                    upload_date: doc.created_at,
-                    file_url: doc.file_url,
-                    source_table: 'documents',
-                    status: verification?.status || 'pending',
-                    ocr_extracted: verification?.ocr || false
-                });
-            });
-
-            // Add profile photo if exists
-            if (profile?.profile_photo_url) {
-                allDocs.push({
-                    id: `${userId}_profile_photo`,
-                    document_type: 'Profile Photo',
-                    upload_date: new Date().toISOString(),
-                    file_url: profile.profile_photo_url,
-                    source_table: 'profiles',
-                    status: verificationMap.get(`${userId}_profile_photo`)?.status || 'pending',
-                    ocr_extracted: false
-                });
-            }
-
-            // Add govt ID if exists
-            if (profile?.govt_id_url) {
-                allDocs.push({
-                    id: `${userId}_govt_id`,
-                    document_type: 'Government ID',
-                    upload_date: new Date().toISOString(),
-                    file_url: profile.govt_id_url,
-                    source_table: 'profiles',
-                    status: verificationMap.get(`${userId}_govt_id`)?.status || 'pending',
-                    ocr_extracted: false
-                });
-            }
-
-            setDocuments(allDocs);
+            setDocuments(data.documents || []);
+            setUserInfo(data.userInfo || null);
         } catch (error) {
             console.error('Error fetching documents:', error);
             toast.error('Failed to load documents');
