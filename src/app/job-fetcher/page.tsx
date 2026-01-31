@@ -91,14 +91,17 @@ export default function JobFetcherPage() {
     const [lastRunResult, setLastRunResult] = useState<{ run_id: string; status: string; message: string } | null>(null);
     const [automationsStopped, setAutomationsStopped] = useState(false);
 
-    // Filter runs to only show those started after Jan 26, 2026
-    const recentRuns = fetchRuns.filter(run => {
+    // Filter stale jobs (older than 1 hour) from being considered "Running"
+    const isJobActive = (run: FetchRun) => {
+        if (run.status !== 'started' && run.status !== 'running') return false;
         const runDate = new Date(run.started_at);
-        return runDate >= RUNS_CUTOFF_DATE;
-    });
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        return runDate > oneHourAgo;
+    };
 
-    // Check if any RECENT job is currently running
-    const isJobRunning = recentRuns.some(run => run.status === 'started' || run.status === 'running');
+    // Check if any RECENTly started job is currently running
+    const activeRun = fetchRuns.find(isJobActive);
+    const isJobRunning = !!activeRun;
 
     useEffect(() => {
         checkRunningJobs();
@@ -133,7 +136,7 @@ export default function JobFetcherPage() {
 
     const checkRunningJobs = async () => {
         try {
-            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=10`, {
+            const response = await fetch(`${JOB_FETCHER_API_URL}/job-fetcher/runs?page=1&page_size=20`, {
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`
                 }
@@ -411,10 +414,10 @@ export default function JobFetcherPage() {
                         </Card>
                     </div>
 
-                    {/* Right Column - Running Indicator (Only show when actually running) */}
-                    <div>
-                        {isJobRunning && (
-                            <Card className="border-orange-200 bg-orange-50">
+                    {/* Right Column - Running Indicator & History */}
+                    <div className="space-y-6">
+                        {isJobRunning && activeRun && (
+                            <Card className="border-orange-200 bg-orange-50 animate-pulse">
                                 <CardContent className="p-6">
                                     <div className="flex items-center gap-3">
                                         <div className="p-3 bg-orange-100 rounded-full">
@@ -427,58 +430,65 @@ export default function JobFetcherPage() {
                                             </p>
                                         </div>
                                     </div>
-                                    {/* Show recent running run details */}
-                                    {recentRuns.filter(r => r.status === 'started' || r.status === 'running').map(run => (
-                                        <div key={run.id} className="mt-4 p-3 bg-white rounded-lg border border-orange-200">
-                                            <p className="text-xs text-gray-500">Run ID: {run.id.slice(0, 8)}...</p>
-                                            <p className="text-xs text-gray-500">Portal: {run.portal}</p>
-                                            <p className="text-xs text-gray-500">
-                                                Started: {new Date(run.started_at).toLocaleTimeString()}
-                                            </p>
-                                        </div>
-                                    ))}
+                                    <div className="mt-4 p-3 bg-white rounded-lg border border-orange-200">
+                                        <p className="text-xs text-gray-500">Run ID: {activeRun.id.slice(0, 8)}...</p>
+                                        <p className="text-xs text-gray-500">Portal: {activeRun.portal}</p>
+                                        <p className="text-xs text-gray-500">
+                                            Started: {new Date(activeRun.started_at).toLocaleTimeString()}
+                                        </p>
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
 
-                        {/* Show recently completed runs */}
-                        {!isJobRunning && recentRuns.length > 0 && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-sm text-gray-600">Recent Runs</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {recentRuns.slice(0, 3).map(run => (
-                                        <div key={run.id} className={`p-3 rounded-lg border ${run.status === 'completed'
-                                            ? 'bg-green-50 border-green-200'
-                                            : run.status === 'failed'
-                                                ? 'bg-red-50 border-red-200'
-                                                : 'bg-gray-50 border-gray-200'
-                                            }`}>
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-xs font-medium text-gray-700">{run.portal}</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded-full ${run.status === 'completed'
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : run.status === 'failed'
-                                                        ? 'bg-red-100 text-red-700'
-                                                        : 'bg-yellow-100 text-yellow-700'
-                                                    }`}>
-                                                    {run.status}
-                                                </span>
+                        {/* Recent Runs History - Always Show */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg text-gray-800">History</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
+                                {fetchRuns.length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-4">No recent runs found</p>
+                                ) : (
+                                    fetchRuns.map(run => {
+                                        const isRunning = run.status === 'started' || run.status === 'running';
+                                        const isStuck = isRunning && !isJobActive(run);
+
+                                        return (
+                                            <div key={run.id} className={`p-3 rounded-lg border ${run.status === 'completed' ? 'bg-green-50 border-green-200' :
+                                                    run.status === 'failed' ? 'bg-red-50 border-red-200' :
+                                                        isStuck ? 'bg-gray-50 border-gray-200' :
+                                                            'bg-yellow-50 border-yellow-200'
+                                                }`}>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-medium text-gray-700">{run.portal}</span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${run.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                            run.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                                                isStuck ? 'bg-gray-200 text-gray-700' :
+                                                                    'bg-yellow-100 text-yellow-800'
+                                                        }`}>
+                                                        {isStuck ? 'Stalled' : run.status}
+                                                    </span>
+                                                </div>
+                                                {run.status === 'completed' && (
+                                                    <p className="text-xs text-gray-600">
+                                                        {run.jobs_found} found, {run.new_jobs_added} new
+                                                    </p>
+                                                )}
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <p className="text-xs text-gray-400">
+                                                        {new Date(run.started_at).toLocaleString()}
+                                                    </p>
+                                                    {isStuck && (
+                                                        <span className="text-[10px] text-gray-400 italic">Timeout</span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            {run.status === 'completed' && (
-                                                <p className="text-xs text-gray-600">
-                                                    {run.jobs_found} found, {run.new_jobs_added} new
-                                                </p>
-                                            )}
-                                            <p className="text-xs text-gray-400">
-                                                {new Date(run.started_at).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        )}
+                                        );
+                                    })
+                                )}
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </div>
